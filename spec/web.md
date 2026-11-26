@@ -13,7 +13,8 @@ The core runs in the server; the page is a *thin client*: HTML, CSS and plain Ja
 - A link to GitHub opens the file; a local `file://` link is shown as text, with **Copy**: a browser does not open it from a page
 - An **organization**: the owner, how many repositories it has and how many skills they hold;
   then each repository *with skills*, as one repository is shown, sorted as `scan`; one without skills is only counted
-  - The filter applies to every repository; a repository with no skill it matches is hidden
+  - The filter applies to every repository; a repository with no skill it matches is hidden;
+    a repository's heading keeps its whole skill count
   - Warnings: each with its repository first, `<owner>/<repo>: <warning>`
   - In **Scanned before**, each repository is a stored scan of its own; none is marked: the page holds many
 - **Warnings**, after the skills
@@ -37,6 +38,8 @@ An organization, `?repo=github.com/<owner>` → `200` with JSON:
 - `organization.repositories` and `organization.skills`: counts, as the CLI prints them
 - `warnings`: every repository's, `<owner>/<repo>: <warning>`, a repository that cannot be scanned too
 - The rate limit, a rejected token, GitHub unreachable, no such owner: `400`, as the CLI's exit code 1
+- The page leaves before the answer (another scan, *back*, a reload, a closed tab): the request closes, and no repository
+  not started yet is asked for; the ones started end, nothing is answered. The page aborts its scan before the next one
 
 `GET /api/scans` → `200`, `{ scans: [{ id, repository, refs, skills, warnings, scannedAt }] }`: the stored scans, the latest first;
 `skills` and `warnings` are counts, `scannedAt` an ISO 8601 time

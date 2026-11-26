@@ -9,6 +9,8 @@ import { run } from '../src/commands.ts';
 import { openGitHub, openGitHubOwner, parseGitHubOwner, parseGitHubUrl, type Fetch } from '../src/core/github.ts';
 import { replay, type Recording } from '../src/core/replay.ts';
 import { openStore } from '../src/store.ts';
+import { filterRepositories } from '../src/web/public/filter.js';
+import { historyView, storedOnPage } from '../src/web/public/history.js';
 import { createWebServer, listen } from '../src/web/server.ts';
 
 const API = 'https://api.github.com';
@@ -400,6 +402,9 @@ test('the web view, an organization: each repository is a stored scan of its own
   for (const { repository, stored: id } of body.repositories) {
     assert.equal(stored.find((scan) => scan.id === id)?.repository.id, repository.id, repository.id);
   }
+  // On the page, none of them is marked in Scanned before: the page holds many.
+  assert.equal(storedOnPage(body), null);
+  assert.ok(historyView(await store.list(), storedOnPage(body)).rows.every((row) => !row.current));
   // The CLI finds them stored: no tree, no file read again.
   const cli = await atlas(['scan', 'github.com/JetBrains'], { store });
   assert.equal(cli.code, 0, cli.stderr);
@@ -411,4 +416,51 @@ test('the web view, a repository still scans as one, with an organization client
   assert.equal(status, 200);
   assert.equal(body.repository.id, 'JetBrains/zeta');
   assert.equal(body.organization, undefined);
+});
+
+test('the web view, an organization under a filter: a repository heading keeps its whole skill count', async (t) => {
+  const { body } = await (await serve(t))('github.com/JetBrains');
+  assert.deepEqual(
+    filterRepositories(body.repositories, 'review').map(({ repository, skills, total }: any) => [repository.id, skills.length, total]),
+    [['JetBrains/Alpha', 1, 2]],
+  );
+});
+
+test('the web view, an organization the page left: the repositories not started yet are not asked for', async (t) => {
+  // 100 repositories without skills, GitHub answering in 20 ms each.
+  const names = Array.from({ length: 100 }, (_, index) => ({ name: `slow-${String(index).padStart(3, '0')}` }));
+  const answers = replay({
+    [`${API}/users/Slow`]: { status: 200, body: { login: 'Slow', type: 'Organization' } },
+    [`${API}/orgs/Slow/repos?type=all&per_page=100&page=1`]: {
+      status: 200,
+      body: names.map(({ name }) => ({ full_name: `Slow/${name}`, default_branch: 'main' })),
+    },
+    [`${API}/orgs/Slow/repos?type=all&per_page=100&page=2`]: { status: 200, body: [] },
+    ...Object.assign({}, ...names.map((fake) => repository('Slow', fake))),
+  });
+  const asked: string[] = [];
+  const fetch: Fetch = async (url, init) => {
+    asked.push(url);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return answers(url, init);
+  };
+  const server = createWebServer({
+    open: (input) => openGitHub(input, { fetch, token: 'test' }),
+    openOrganization: (input) => (parseGitHubOwner(input) ? openGitHubOwner(input, { fetch, token: 'test' }) : undefined),
+  });
+  const base = await listen(server, 0);
+  t.after(() => server.close());
+  const started = () => new Set(asked.filter((url) => /\/repos\/Slow\/[^/]+$/.test(url))).size;
+  // Unaborted, every repository is scanned: the test would see the difference.
+  const leaving = new AbortController();
+  const page = globalThis.fetch(`${base}/api/scan?repo=github.com%2FSlow`, { signal: leaving.signal });
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  leaving.abort();
+  await assert.rejects(page);
+  const atAbort = started();
+  assert.ok(atAbort > 0 && atAbort < 100, `started at the abort: ${atAbort}`);
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  // At most the 8 repositories being scanned at the abort, whose scans end; none started after.
+  assert.ok(started() <= atAbort + 8, `started at the abort: ${atAbort}, later: ${started()}`);
+  assert.ok(started() < 100, `started: ${started()}`);
 });

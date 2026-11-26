@@ -22,12 +22,14 @@ const AT_A_TIME = 8;
 /**
  * Every repository of the organization, sorted by name, case-insensitive; each one a scan of its
  * own, stored as one. A repository that cannot be scanned is skipped with its error; when GitHub
- * answers no more, the whole scan fails.
+ * answers no more, the whole scan fails. Once `signal` aborts (nobody waits for the answer any more),
+ * no repository is started, and the scan fails with the signal's reason when the ones started end.
  */
 export async function scanOrganization(
   organization: Organization,
   open: (input: string) => Promise<Source>,
   store?: Store,
+  signal?: AbortSignal,
 ): Promise<RepositoryScan[]> {
   const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
   const repositories = [...organization.repositories].sort(
@@ -37,7 +39,7 @@ export async function scanOrganization(
   let next = 0;
   let stopped = false;
   async function worker() {
-    while (!stopped && next < repositories.length) {
+    while (!stopped && !signal?.aborted && next < repositories.length) {
       const index = next++;
       const { id, input } = repositories[index];
       try {
@@ -52,5 +54,6 @@ export async function scanOrganization(
     }
   }
   await Promise.all(Array.from({ length: Math.min(AT_A_TIME, repositories.length) }, worker));
+  signal?.throwIfAborted();
   return scans;
 }

@@ -17,14 +17,14 @@ export function filterSkills(skills, query) {
 
 /**
  * An organization's repositories, each with only its skills the query matches, as `filterSkills`
- * does; a repository with none is left out.
+ * does, and `total`, its whole skill count, for its heading; a repository with none is left out.
  * @template {{ skills: { name: string, description: string }[] }} R
  * @param {R[]} repositories
  * @param {string} query
- * @returns {R[]}
+ * @returns {(R & { total: number })[]}
  */
 export function filterRepositories(repositories, query) {
   return repositories
-    .map((repository) => ({ ...repository, skills: filterSkills(repository.skills, query) }))
+    .map((repository) => ({ ...repository, skills: filterSkills(repository.skills, query), total: repository.skills.length }))
     .filter((repository) => repository.skills.length > 0);
 }

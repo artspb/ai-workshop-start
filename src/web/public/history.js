@@ -24,6 +24,16 @@ export function storedBox(repository) {
 }
 
 /**
+ * The stored scan an answer puts on the page, the one marked in Scanned before: a repository's or a
+ * stored scan's id; none for an organization, whose page holds many stored scans, not one.
+ * @param {{ stored?: string | null, organization?: unknown }} answer
+ * @returns {string | null}
+ */
+export function storedOnPage(answer) {
+  return answer.organization ? null : (answer.stored ?? null);
+}
+
+/**
  * Scanned before: hidden while nothing is stored; else a row per stored scan, in the server's
  * order, the latest first, and only the one on the page marked, by its id.
  * @param {{ id: string, repository: { id: string, commit: string }, refs: string[], skills: number, warnings: number, scannedAt: string }[]} scans
