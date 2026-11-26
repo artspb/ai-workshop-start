@@ -9,8 +9,8 @@ each repository a stored scan of its own, none marked, not scanned again. See [w
 
 ## Steps
 1. Open the server's URL. Type `https://github.com/octocat` in the box, then press **Scan**.
-   - See: while it scans, "Scanning https://github.com/octocat… <k> of 8 repositories", `k` growing from 0 to 8, a bar filling
-     with it, and **Stop**. It can be quick: a second or two.
+   - See: while it scans, "Scanning https://github.com/octocat… <k> of 8 repositories", `k` growing up to 8 (it may
+     skip a number), a bar filling with it, and **Stop**. It can be quick: a second or two.
 2. Wait for the scan to end.
    - See: the heading "octocat · 8 repositories · 0 skills", no commit beside it; no skill, no filter, no "Warnings".
      The bar and **Stop** are gone. The heading "octocat" is a link to `https://github.com/octocat`.

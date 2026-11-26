@@ -13,7 +13,7 @@ none matching; a new scan clears it. See [web.md](../spec/web.md#the-page).
 2. Type `release` in the filter.
    - See: two skills, both "release-checklist". The heading still reads "fixture · 5 skills".
 3. Replace the filter with `STEPS Release`.
-   - See: one skill, "release-checklist", reading "Steps before a release.": both words, in any case.
+   - See: one skill, "release-checklist", reading "Steps before a release. Tag, write the notes, announce.": both words, in any case.
 4. Replace the filter with `commit messages`.
    - See: one skill, "commits": the words are in its description, not its name.
 5. Replace the filter with `gradle commits`.
