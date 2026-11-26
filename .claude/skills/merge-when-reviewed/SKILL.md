@@ -160,7 +160,9 @@ env -i PATH="$PATH" HOME="$(mktemp -d)" sh -c 'npm ci && npm run typecheck && np
 git range-diff origin/<baseRefName> <headRefOid> HEAD
 ```
 The range-diff shows what the rebase changed in the pull request's own commits: only what the conflict required,
-and when behind, nothing but context.
+and when behind, nothing but context. A commit shown as dropped (`<`) is one the base already has, from a pull request
+this branch was stacked on (`git rebase` says "skipped previously applied commit"): check that
+`git log --oneline <headRefOid>..origin/<baseRefName>` lists it, then go on.
 Something failed and the fix is not a resolution you are sure of: it is a conflict you cannot resolve (below).
 
 ### Push
