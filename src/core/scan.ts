@@ -20,6 +20,11 @@ export type Source = {
    * known once listed, so the listing says which one it is. Without keys, scanned every time.
    */
   keys?: string[];
+  /**
+   * Whether a result stored under one of `keys` is this source's; without it, any is. A key an
+   * earlier version stored under may hold either listing: one answer for every input, or roots.
+   */
+  serves?(key: string, result: ScanResult): boolean;
   /** What was asked for, for people: `main (default branch)`, or the ref of `/tree/<ref>`. */
   ref?: string;
 };
@@ -69,7 +74,7 @@ export async function scan(source: Source, store?: Store): Promise<Scanned> {
   const ref = source.ref ?? '';
   for (const key of source.keys) {
     const hit = await store.get(key);
-    if (hit) return { result: hit, stored: (await store.addRef(key, ref)) ? store.id(key) : null };
+    if (hit && (source.serves?.(key, hit) ?? true)) return { result: hit, stored: (await store.addRef(key, ref)) ? store.id(key) : null };
   }
   const { result, key } = await scanFiles(source);
   if (!key) return { result, stored: null };

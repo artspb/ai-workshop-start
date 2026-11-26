@@ -26,7 +26,8 @@ A GitHub scan listed through its **tree** is **stored**, with `GITHUB_TOKEN` or 
   - A tree in **one answer** lists the same for every ref, with `GITHUB_TOKEN` or without: **one stored scan**
   - A tree **too large**: the roots, stored apart for a `/tree/<ref>` and for the default branch (the warning is worded for each);
     with `GITHUB_TOKEN`, the default branch uses code search instead, never served the roots
-  - A scan an earlier version stored, for a `/tree/<ref>` or for the default branch without `GITHUB_TOKEN`, is found again
+  - A scan an earlier version stored, for a `/tree/<ref>` or for the default branch without `GITHUB_TOKEN`, is found again:
+    of a tree in one answer, it is the one stored scan, for every ref, with `GITHUB_TOKEN` or without; of the roots, only for its own kind
 - A **code search** scan is never stored: the index follows the default branch late, and may not have every skill of the commit yet;
   the next scan may find more
 - Each stored scan records **every ref asked for**, in order: `<branch> (default branch)`, the `<ref>` of `/tree/<ref>`;
