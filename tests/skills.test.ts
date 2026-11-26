@@ -62,7 +62,7 @@ test('a root with no SKILL.md has no skills to compare, whatever else it holds',
     mkdirSync(join(root, dir, 'renamed'), { recursive: true });
     writeFileSync(join(root, dir, '.gitkeep'), '');
     writeFileSync(join(root, dir, 'README.md'), 'moved\n');
-    writeFileSync(join(root, dir, 'renamed', 'skill.md'), dir);
+    writeFileSync(join(root, dir, 'renamed', 'skill.txt'), dir); // not `skill.md`: a case-insensitive file system finds it as SKILL.md
   }
   for (const dir of ROOTS) assert.deepEqual(skills(root, dir), []);
 });
