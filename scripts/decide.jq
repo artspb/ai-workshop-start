@@ -34,7 +34,7 @@ pr as $p | merge_flags as $f
 | to_settle as $settle
 | (if $p == null then { decision: "nothing", reason: "no such pull request" }
    elif $p.state != "OPEN" then { decision: "nothing", reason: "the pull request is \($p.state | ascii_downcase)" }
-   elif $event == "pull_request" and ($action | IN("opened", "synchronize")) then
+   elif ($event | IN("pull_request_target", "pull_request")) and ($action | IN("opened", "synchronize")) then
      { decision: "start", start: ["code-review"], reason: "a new head, \($head): Code Review reviews it" }
    elif $completed then
      if ($f.no_named | not) then
@@ -58,7 +58,7 @@ pr as $p | merge_flags as $f
            and ((rounds >= 3 and stopped) | not)
          then "address-review" else empty end),
         (if ($settle | length > 0) and $id != $f.review then "code-review"
-         elif ($event | IN("workflow_dispatch", "pull_request")) and ($f.on_head | not) then "code-review"
+         elif ($event | IN("workflow_dispatch", "pull_request_target", "pull_request")) and ($f.on_head | not) then "code-review"
          else empty end) ] ) as $start
      | if ($start | length) > 0 then
          { decision: "start", start: $start,

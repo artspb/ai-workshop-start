@@ -3,7 +3,10 @@ Three Air automations work on pull requests: **Code Review** (`code-review`), **
 and **Merge Reviewed** (`merge-when-reviewed`). The *Automations* workflow, `.github/workflows/automations.yml`,
 starts one only when there is work for it, and merges or brings a branch up to date itself, without an agent.
 ## Events
-- `pull_request`: `opened`, `synchronize`, `reopened`; `pull_request_review`: `submitted`
+- `pull_request_target`: `opened`, `synchronize`, `reopened`; `pull_request_review`: `submitted`
+  - `pull_request_target`, not `pull_request`: GitHub runs no `pull_request` workflow on a pull request that conflicts
+    with its base, so a new head there would start no Code Review. It runs `main`'s copy of the workflow, never the
+    pull request's, on a fork's pull request too
 - `workflow_dispatch`, with a pull request's number: the same decision, by hand
 - One read of the pull request, `scripts/pull-request.graphql`; the decision, `scripts/decide.jq`
 - The rules are the skills': `scripts/review.jq`, which the skills run too (`scripts/merge-when-reviewed.jq`, `scripts/unanswered.jq`)
@@ -15,6 +18,7 @@ The first that applies:
   Code Review's latest review on the head, starting `Nothing blocks`, no inline finding; every thread resolved;
   only the bot and the workflow commented; no pending review)
   - its summary names a `path:line` or a label → start **Merge Reviewed**: whether it is a finding needs judgement
+  - a summary with neither is taken as it is: a finding it states in words only, or with a path and no line, is merged
   - the conflict on this head is already handed over (merge-when-reviewed's `conflict:<head>` marker) → *nothing*
   - a check fails → *nothing*
   - the checks run, or GitHub's merge state is `UNKNOWN` → *wait*: read again every 20 seconds, up to 15 minutes; then *nothing*
@@ -41,7 +45,9 @@ a check of the workflow `Automations`, or one named `automations: …`.
   not passed, the workflow's own included
 ## Merge
 - Read the pull request again right before: still a merge, on the same head; `gh pr merge --rebase --delete-branch --match-head-commit <head>`
-- Merged → merge-when-reviewed's comment, `Merged with rebase: …`; refused → *nothing*
+- Merged → merge-when-reviewed's comment, `Merged with rebase: …`
+- Refused with the pull request still open on the reviewed head (the token may not merge a change to `.github/workflows`)
+  → start **Merge Reviewed**; refused otherwise (a new head, or merged meanwhile) → *nothing*
 ## Bring up to date
 - The reviewed head is rebased onto the base's commit with git only, committer `github-actions[bot]` with the base
   commit's date: the same input makes the same commits, in any job
