@@ -39,3 +39,6 @@ a { color: var(--accent); }
 #history li.current a { color: inherit; text-decoration: none; }
 #history code { font-family: ui-monospace, monospace; }
 [hidden] { display: none !important; }
+.repository > h3 { margin: 1.5rem 0 0; }
+.repository > ul { list-style: none; padding: 0; }
+.repository .commit { color: var(--muted); font-family: ui-monospace, monospace; font-size: 0.875rem; font-weight: normal; }

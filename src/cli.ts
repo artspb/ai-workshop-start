@@ -19,5 +19,5 @@ process.exitCode = await run(process.argv.slice(2), {
   store,
   print: (text) => console.log(text),
   error: (text) => console.error(text),
-  serve: (port) => listen(createWebServer({ open, store }), port),
+  serve: (port) => listen(createWebServer({ open, openOrganization, store }), port),
 });

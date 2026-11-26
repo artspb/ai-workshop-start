@@ -1,6 +1,6 @@
 // The page: a thin client of /api/scan and /api/scans. The address holds the scan:
-// /?repo=<URL | directory> scans, /?scan=<id> opens a stored scan.
-import { filterSkills } from './filter.js';
+// /?repo=<URL | directory | organization URL> scans, /?scan=<id> opens a stored scan.
+import { filterRepositories, filterSkills } from './filter.js';
 import { addressRequest, historyView, storedBox } from './history.js';
 
 const $ = (id) => document.getElementById(id);
@@ -13,6 +13,8 @@ const earlier = $('history');
 
 /** The last scan's skills; the filter shows a part of them. */
 let skills = [];
+/** The last scan's repositories with skills, for an organization; null for one repository. */
+let repositories = null;
 /** Only the latest scan is shown, whatever order the answers come in. */
 let latest = 0;
 /** The stored scan on the page, if any: the one marked in Scanned before. */
@@ -62,8 +64,9 @@ async function scanAddress() {
   } else {
     status.hidden = true;
     if (request.scan) input.value = storedBox(answer.repository);
-    shown = answer.stored;
-    showResult(answer);
+    shown = answer.stored ?? null;
+    if (answer.organization) showOrganization(answer);
+    else showResult(answer);
   }
   // A new scan may be stored now.
   showHistory();
@@ -96,18 +99,38 @@ function showStatus(text, error = false) {
   status.hidden = false;
 }
 
+const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
 function showResult({ repository, skills: scanned, warnings }) {
   skills = scanned;
+  repositories = null;
   const link = $('repository');
   link.textContent = repository.id;
   // A browser does not open file:// from a page: a local directory's name is text.
   if (repository.url.startsWith('file:')) link.removeAttribute('href');
   else link.href = repository.url;
-  $('count').textContent = `${scanned.length} ${scanned.length === 1 ? 'skill' : 'skills'}`;
+  $('count').textContent = count(scanned.length, 'skill', 'skills');
   $('commit').textContent = repository.commit ? `at ${repository.commit.slice(0, 12)}` : 'local directory';
   $('commit').title = repository.commit;
+  showRest(warnings);
+}
+
+/** An organization: the owner and its counts, then each repository with skills, as one is shown. */
+function showOrganization({ organization, repositories: scanned, warnings }) {
+  repositories = scanned;
+  skills = scanned.flatMap((repository) => repository.skills);
+  const link = $('repository');
+  link.textContent = organization.id;
+  link.href = organization.url;
+  $('count').textContent = `${count(organization.repositories, 'repository', 'repositories')} · ${count(organization.skills, 'skill', 'skills')}`;
+  $('commit').textContent = '';
+  $('commit').title = '';
+  showRest(warnings);
+}
+
+function showRest(warnings) {
   filter.value = '';
-  filter.hidden = scanned.length === 0;
+  filter.hidden = skills.length === 0;
   showSkills();
   const list = $('warnings').querySelector('ul');
   list.replaceChildren(...warnings.map((warning) => element('li', {}, warning)));
@@ -116,9 +139,28 @@ function showResult({ repository, skills: scanned, warnings }) {
 }
 
 function showSkills() {
+  if (repositories) {
+    const shown = filterRepositories(repositories, filter.value);
+    const total = new Map(repositories.map((repository) => [repository.repository.id, repository.skills.length]));
+    $('skills').replaceChildren(...shown.map((repository) => repositoryItem(repository, total.get(repository.repository.id))));
+    $('empty').hidden = shown.length > 0 || skills.length === 0;
+    return;
+  }
   const shown = filterSkills(skills, filter.value);
   $('skills').replaceChildren(...shown.map(skillItem));
   $('empty').hidden = shown.length > 0 || skills.length === 0;
+}
+
+/** One repository of an organization: its name, skill count and commit, then the skills the filter shows. */
+function repositoryItem({ repository, skills: shown }, total) {
+  const heading = element(
+    'h3',
+    {},
+    element('a', { href: repository.url }, repository.id),
+    ` · ${count(total, 'skill', 'skills')} `,
+    element('span', { className: 'commit', title: repository.commit }, `at ${repository.commit.slice(0, 12)}`),
+  );
+  return element('li', { className: 'repository' }, heading, element('ul', {}, ...shown.map(skillItem)));
 }
 
 function skillItem(skill) {

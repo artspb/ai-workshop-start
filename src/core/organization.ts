@@ -11,8 +11,10 @@ export type Organization = {
   repositories: { id: string; input: string }[];
 };
 
-/** One repository of an organization: its result, or why it could not be scanned. */
-export type RepositoryScan = { id: string; result: ScanResult; error?: undefined } | { id: string; result?: undefined; error: string };
+/** One repository of an organization: its result and its stored scan's id, or why it could not be scanned. */
+export type RepositoryScan =
+  | { id: string; result: ScanResult; stored: string | null; error?: undefined }
+  | { id: string; result?: undefined; stored?: undefined; error: string };
 
 /** Scanned at the same time: each repository mostly waits on GitHub. */
 const AT_A_TIME = 8;
@@ -39,7 +41,7 @@ export async function scanOrganization(
       const index = next++;
       const { id, input } = repositories[index];
       try {
-        scans[index] = { id, result: (await scan(await open(input), store)).result };
+        scans[index] = { id, ...(await scan(await open(input), store)) };
       } catch (error) {
         if (error instanceof GitHubUnavailable || !(error instanceof AtlasError)) {
           stopped = true; // the repositories not started yet are not asked for

@@ -8,7 +8,7 @@ import { createServer } from 'node:net';
 import { after, test } from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { createWebServer, listen } from '../src/web/server.ts';
-import { filterSkills } from '../src/web/public/filter.js';
+import { filterRepositories, filterSkills } from '../src/web/public/filter.js';
 import { addressRequest, historyView, storedBox } from '../src/web/public/history.js';
 import { atlas, CLI, EXAMPLE_COMMIT, FIXTURE, open } from './helpers.ts';
 
@@ -110,12 +110,6 @@ test('/api/scan, an error the CLI reports with exit code 1: 400 with its message
   const unknown = await scan('github.com/JetBrains/unknown');
   assert.equal(unknown.status, 400);
   assert.match(unknown.body.error, /JetBrains\/unknown/);
-  // An organization: the CLI's only.
-  assert.deepEqual(await scan('https://github.com/JetBrains/'), {
-    status: 400,
-    type: 'application/json; charset=utf-8',
-    body: { error: 'An organization is scanned by the CLI only: skill-atlas scan https://github.com/JetBrains/' },
-  });
 });
 
 test('/api/scan, anything else: 500 with the message', async () => {
@@ -166,6 +160,20 @@ test('the filter: every word, case-insensitive, in the name or the description',
   assert.deepEqual(names('commit messages'), ['commits']);
   assert.deepEqual(names('commit gradle'), []);
   assert.deepEqual(names('release'), ['release-checklist']);
+});
+
+test('the filter, an organization: every repository; one with no skill it matches is hidden', () => {
+  const repositories = [
+    { repository: { id: 'JetBrains/Alpha' }, skills: [{ name: 'review', description: 'Review a change.' }, { name: 'broken', description: '' }] },
+    { repository: { id: 'JetBrains/kotlin' }, skills: [{ name: 'bump', description: 'Bump a version.' }] },
+  ];
+  const shown = (query: string) => filterRepositories(repositories, query).map((r) => [r.repository.id, r.skills.map((skill) => skill.name)]);
+  assert.deepEqual(shown(''), [['JetBrains/Alpha', ['review', 'broken']], ['JetBrains/kotlin', ['bump']]]);
+  assert.deepEqual(shown('REVIEW'), [['JetBrains/Alpha', ['review']]]);
+  assert.deepEqual(shown('a version'), [['JetBrains/kotlin', ['bump']]]);
+  assert.deepEqual(shown('nothing'), []);
+  // The repositories given are not changed.
+  assert.equal(repositories[0].skills.length, 2);
 });
 
 test('the address: /?repo= scans, /?scan=<id> opens a stored scan, repo first; nothing, neither', () => {
