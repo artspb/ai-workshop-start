@@ -5,6 +5,7 @@ Read [./spec](spec/) first. Update it with the code.
 Integration tests for every case in the spec.
 ## Definition of done
 - All tests pass locally
+- The CI build ([.github/workflows/ci.yml](.github/workflows/ci.yml)) is green
 
 ## Commands
 - `npm ci`: first, in a fresh checkout
