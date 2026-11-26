@@ -160,16 +160,16 @@ head; else push nothing, put the branch back (below) and stop.
 git push --force-with-lease=<headRefName>:<headRefOid> origin HEAD:<headRefName>
 ```
 The lease is the head that was reviewed: a push someone made meanwhile is refused, never overwritten. Refused:
-put the branch back, post nothing and stop; the new head gets its own review.
-
-**Put the branch back** whenever you don't push: `git reset --hard <headRefOid>`. An Air run can end with the
-platform pushing the current branch; left on the rebased commits, the checkout would hold unreviewed, perhaps
-unverified commits to push. On the reviewed head, there is nothing left to push. This is the one exception to "never force-push a branch
-with review comments on it", and only for the bot's own pull request with a completed review.
+put the branch back, post nothing and stop; the new head gets its own review. This is the one exception to "never
+force-push a branch with review comments on it", and only for the bot's own pull request with a completed review.
 Then one comment, so the force-push explains itself:
 ```sh
 gh pr comment <n> --body 'Rebased onto <baseRefName> (<short sha of origin/<baseRefName>>): Code Review <link to its latest review> found nothing on <short sha of headRefOid>, but it conflicted with <the base pull requests> in <files>. <How each was resolved, both changes kept.> To re-review the rebase, compare `git range-diff <sha of origin/<baseRefName>> <headRefOid> <new head>`, not `git diff <headRefOid>..<new head>`, which shows only what <baseRefName> gained. Not merged: the new head waits for its review.'
 ```
+
+**Put the branch back** whenever you don't push: `git reset --hard <headRefOid>`. An Air run can end with the
+platform pushing the current branch; left on the rebased commits, the checkout would hold unreviewed, perhaps
+unverified commits to push. On the reviewed head, there is nothing left to push.
 
 ### A conflict you cannot resolve with confidence
 The two changes contradict each other, the spec does not say which wins, or the verification fails and the fix
