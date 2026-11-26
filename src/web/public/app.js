@@ -28,11 +28,12 @@ scanAddress();
 async function scanAddress() {
   const repo = new URLSearchParams(location.search).get('repo')?.trim() ?? '';
   input.value = repo;
+  // Every address cancels the scan before it, an empty one too.
+  const scan = ++latest;
   if (!repo) {
     status.hidden = result.hidden = true;
     return;
   }
-  const scan = ++latest;
   showStatus(`Scanning ${repo}…`);
   result.hidden = true;
   let answer;
