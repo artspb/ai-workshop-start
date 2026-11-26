@@ -58,6 +58,11 @@ jobs:
           ACTION: ${{ github.event.action }}
           REVIEW: ${{ github.event.review.id }}
         run: |
+          # The scripts are main's: until the pull request that adds them is merged, there is nothing to decide with.
+          if [ ! -x scripts/decide.sh ]; then
+            echo "decision=nothing" >> "$GITHUB_OUTPUT"
+            echo "#$N: nothing: scripts/decide.sh is not on main yet" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
           # A completed review waits for the checks and for GitHub's merge state: up to 45 reads, 20 seconds apart.
           TRIES=45 scripts/decide.sh "$N" "$EVENT" "$ACTION" "$REVIEW" > decision.json
           jq -r --arg ref "$(jq -r .data.repository.pullRequest.headRefName pr.json)" \

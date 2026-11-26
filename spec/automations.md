@@ -62,5 +62,6 @@ a check of the workflow `Automations`, or one named `automations: …`.
 ## Job summary
 One line: `#<n>: <decision>: <why>`, e.g. `#54: start Address Review: 2 unanswered threads and 0 review bodies: Address Review answers them`
 ## Secrets
+- `scripts/decide.sh` not on `main` yet (the pull request that adds it) → *nothing*, and the job is green
 - The decision checks out `main`, not the pull request; the pull request's code runs only in Verify, without a secret
 - One run at a time per pull request and kind of event: a review never replaces a waiting new head
