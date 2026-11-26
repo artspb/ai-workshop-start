@@ -103,6 +103,7 @@ test('./fixture on GitHub, listed through the tree: the same project skills, sym
     open: (input) => openGitHub(input, { fetch: github }),
     print: (text) => stdout.push(text),
     error: () => {},
+    serve: () => Promise.reject(new Error('not served')),
   });
   assert.equal(code, 0);
   assert.equal(

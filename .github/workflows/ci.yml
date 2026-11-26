@@ -26,8 +26,11 @@ jobs:
       - run: npm run e2e
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # The real CLI on the fixture repository, as a user would run it: it must exit 0.
+      # The real CLI on the fixture repository, as a user would run it: it must exit 0; the web view must answer.
       - name: Smoke test
         run: |
           ./skill-atlas help
           ./skill-atlas scan ./fixture
+          ./skill-atlas serve --port 4173 &
+          curl -fsS --retry 10 --retry-connrefused --retry-delay 1 "http://localhost:4173/api/scan?repo=./fixture" > /dev/null
+          kill $!
