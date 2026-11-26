@@ -21,6 +21,8 @@ gh pr list --search "<n> in:body" --state all    # someone on it already?
 - Read [spec/](../../../spec/) and [AGENTS.md](../../../AGENTS.md) first.
 - **Unclear, or two reasonable readings that change the result?** Ask on the issue
   (`gh issue comment <n>`) and stop. Don't guess a behaviour the spec will then have to keep.
+  The question goes to the owner, with the readings as its options ([Handing over to a person](#handing-over-to-a-person));
+  a question of yours on the issue that nobody has answered since: post nothing new, and stop.
 - Already done, or a duplicate: say so on the issue, with the commit or the pull request, and stop.
 
 ## 2. Branch
@@ -144,3 +146,15 @@ at once, so the Delegate to AI automation (issue-to-pr) picks it up, with no per
    ```
 3. **Say which**: name the issue, `#<m>`, filed or commented on, in the skill's answer (the pull request's body,
    the reply on the thread, the QA report).
+
+## Handing over to a person
+Every skill that leaves a decision for a person follows this section, word for word: the person is told, so a decision
+never waits unseen until someone checks the pull requests by hand.
+1. **Mention the owner**: the `@<login>` in the [Owner](../../../AGENTS.md#owner) section of AGENTS.md, written there
+   only, never in a skill, so GitHub notifies them.
+2. **Once per hand-over**, in the comment that states the decision: not in every reply, summary or routine comment.
+3. **A question with its options**, so it can be answered without reading the whole thread:
+   `@<login>: <the decision, as a question>? <option one, and what follows from it>, or <option two, and what follows>.`
+4. **Never again for the same decision**: a comment of the bot in the same thread, or on the same pull request or issue
+   about the same decision, already mentions the owner → no mention. A re-run that finds the decision still open
+   posts nothing new.

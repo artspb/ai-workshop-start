@@ -38,6 +38,8 @@ This skill runs on every submitted review, and your own round is a review too. S
   (a stranded round 3 is still submitted, section 3, without a new commit): then, once, post
   `Stopped after 3 rounds of review fixes; the open threads are for a person.` as a pull request comment
   (`gh pr comment <n>`, with the marker), unless one of the pull request's `comments` has it already.
+  It hands the open threads to the owner ([Handing over to a person](#handing-over-to-a-person)): after that line,
+  `@<login>: <the open threads>: fix them, or resolve them as fine as is?`
 
 ```sh
 gh api graphql -F owner='{owner}' -F repo='{repo}' -F n=<n> -f query='
@@ -73,7 +75,8 @@ For each finding, reproduce what it claims, as it says to:
 - **It does not hold** → **Not changed**, with what you ran and what it printed.
 - **A question** → answer it; change code only if the answer shows a defect. Answered with a commit, the reply
   still starts with `Fixed in <sha>:`, the answer after it, so Code Review knows to run the reproduction again.
-- **A choice the spec leaves open, or two reviewers disagree** → don't pick; say so for a person.
+- **A choice the spec leaves open, or two reviewers disagree** → don't pick: **Not changed**, with the choice as a
+  question to the owner and its options ([Handing over to a person](#handing-over-to-a-person)).
 - **Outdated** (`isOutdated`): check it against the current code; already fixed → say by which commit.
 
 Stay in the pull request's scope. A real problem outside it: file an issue ([Filing an issue](#filing-an-issue)) and name it, `#<m>`, in the answer.
@@ -142,3 +145,15 @@ at once, so the Delegate to AI automation (issue-to-pr) picks it up, with no per
    ```
 3. **Say which**: name the issue, `#<m>`, filed or commented on, in the skill's answer (the pull request's body,
    the reply on the thread, the QA report).
+
+## Handing over to a person
+Every skill that leaves a decision for a person follows this section, word for word: the person is told, so a decision
+never waits unseen until someone checks the pull requests by hand.
+1. **Mention the owner**: the `@<login>` in the [Owner](../../../AGENTS.md#owner) section of AGENTS.md, written there
+   only, never in a skill, so GitHub notifies them.
+2. **Once per hand-over**, in the comment that states the decision: not in every reply, summary or routine comment.
+3. **A question with its options**, so it can be answered without reading the whole thread:
+   `@<login>: <the decision, as a question>? <option one, and what follows from it>, or <option two, and what follows>.`
+4. **Never again for the same decision**: a comment of the bot in the same thread, or on the same pull request or issue
+   about the same decision, already mentions the owner → no mention. A re-run that finds the decision still open
+   posts nothing new.
