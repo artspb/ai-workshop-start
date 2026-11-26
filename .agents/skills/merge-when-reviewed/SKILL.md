@@ -116,6 +116,9 @@ Never merge with `--admin`, never another method, never a pull request that is n
 The review is completed, but `main` moved and changed the same lines. Nothing else resolves the conflict, so you do,
 on the bot's own pull request only (check 1), and you **don't merge** in this run: the new head has not been reviewed.
 Code Review re-reviews it on the push (`pull_request.synchronize`), and the run on that review merges it as usual.
+Its re-review reads `git diff <last reviewed commit>..<head>`, which after a rebase holds only what the base gained,
+none of the pull request's own change; so the rebase comment (below) names the reviewed head, the base and the
+`git range-diff` that shows what the rebase changed in the pull request's commits.
 
 **Already said**: a pull request comment of the bot already has the line `<!-- merge-when-reviewed conflict:<headRefOid> -->`
 (this head, below) → post nothing and stop: a person has the conflict.
@@ -150,20 +153,27 @@ The range-diff shows what the rebase changed in the pull request's own commits: 
 Something failed and the fix is not a resolution you are sure of: it is a conflict you cannot resolve (below).
 
 ### Push
+Read the pull request again right before pushing (section 1), as before a merge: the lease catches a push, not a
+comment or a review that arrived while you rebased. Checks 1–5 must still hold and `headRefOid` must be the reviewed
+head; else push nothing, put the branch back (below) and stop.
 ```sh
 git push --force-with-lease=<headRefName>:<headRefOid> origin HEAD:<headRefName>
 ```
 The lease is the head that was reviewed: a push someone made meanwhile is refused, never overwritten. Refused:
-post nothing and stop; the new head gets its own review. This is the one exception to "never force-push a branch
+put the branch back, post nothing and stop; the new head gets its own review.
+
+**Put the branch back** whenever you don't push: `git reset --hard <headRefOid>`. An Air run can end with the
+platform pushing the current branch; left on the rebased commits, the checkout would hold unreviewed, perhaps
+unverified commits to push. On the reviewed head, there is nothing left to push. This is the one exception to "never force-push a branch
 with review comments on it", and only for the bot's own pull request with a completed review.
 Then one comment, so the force-push explains itself:
 ```sh
-gh pr comment <n> --body 'Rebased onto <baseRefName> (<short sha of origin/<baseRefName>>): Code Review <link to its latest review> found nothing on <short sha of headRefOid>, but it conflicted with <the base pull requests> in <files>. <How each was resolved, both changes kept.> Not merged: the new head waits for its review.'
+gh pr comment <n> --body 'Rebased onto <baseRefName> (<short sha of origin/<baseRefName>>): Code Review <link to its latest review> found nothing on <short sha of headRefOid>, but it conflicted with <the base pull requests> in <files>. <How each was resolved, both changes kept.> To re-review the rebase, compare `git range-diff <sha of origin/<baseRefName>> <headRefOid> <new head>`, not `git diff <headRefOid>..<new head>`, which shows only what <baseRefName> gained. Not merged: the new head waits for its review.'
 ```
 
 ### A conflict you cannot resolve with confidence
 The two changes contradict each other, the spec does not say which wins, or the verification fails and the fix
-would be a guess: rebase nothing (`git rebase --abort` while it runs; once it has finished, just don't push),
+would be a guess: rebase nothing (`git rebase --abort` while it runs; once it has finished, put the branch back),
 and leave **one** comment for a person:
 ```sh
 gh pr comment <n> --body $'Not rebased: <headRefOid short> conflicts with <baseRefName> in <files>. <For each: what the pull request does, what the base does, and why they cannot both hold, or what the spec leaves open.> For a person to resolve.\n\n<!-- merge-when-reviewed conflict:<headRefOid> -->'
