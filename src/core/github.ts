@@ -1,5 +1,6 @@
-import { AtlasError } from './errors.ts';
+import { AtlasError, GitHubUnavailable } from './errors.ts';
 import { SKILL_ROOTS } from './find.ts';
+import type { Organization } from './organization.ts';
 import type { Source } from './scan.ts';
 
 /** The part of `fetch` the core uses, so tests and the browser can pass their own. */
@@ -27,6 +28,40 @@ export function parseGitHubUrl(input: string): { owner: string; repo: string; re
   );
   if (!match) return undefined;
   return match[3] ? { owner: match[1], repo: match[2], ref: decodeURIComponent(match[3]) } : { owner: match[1], repo: match[2] };
+}
+
+/** `https://github.com/<owner>`, with or without the scheme or a trailing slash: an organization or a user. */
+export function parseGitHubOwner(input: string): string | undefined {
+  return /^(?:https?:\/\/)?(?:www\.)?github\.com\/([\w.-]+)\/?$/i.exec(input.trim())?.[1];
+}
+
+/**
+ * The owner's repositories, each one at its default branch, as `/tree/<default branch>`: an
+ * organization's, every one the scan can see; a user's, the ones they own.
+ */
+export async function openGitHubOwner(input: string, options: GitHubOptions): Promise<Organization> {
+  const login = parseGitHubOwner(input);
+  if (!login) throw new AtlasError(`Not a GitHub organization URL: ${input}`);
+  const github = client(options);
+  const owner = await github.json<{ login: string; type: string }>(
+    `${API}/users/${login}`,
+    `Organization or user not found: https://github.com/${login}`,
+  );
+  const list =
+    owner.type === 'Organization' ? `${API}/orgs/${owner.login}/repos?type=all` : `${API}/users/${owner.login}/repos?type=owner`;
+  const repositories = new Map<string, string>(); // pages can repeat a repository created while listing
+  for (let page = 1; ; page++) {
+    const answer = await github.json<{ full_name: string; default_branch: string }[]>(`${list}&per_page=100&page=${page}`);
+    for (const { full_name: id, default_branch: branch } of answer) {
+      repositories.set(id, `https://github.com/${id}/tree/${encodeURIComponent(branch)}`);
+    }
+    if (answer.length < 100) break;
+  }
+  return {
+    id: owner.login,
+    url: `https://github.com/${owner.login}`,
+    repositories: [...repositories].map(([id, input]) => ({ id, input })),
+  };
 }
 
 /** Resolves the ref, or the default branch, to a commit and lists the files that may be skills. */
@@ -135,7 +170,7 @@ function client({ fetch, token }: GitHubOptions) {
     try {
       return await fetch(url, init);
     } catch (error) {
-      throw new AtlasError(`Cannot reach GitHub: ${describe(error)}`);
+      throw new GitHubUnavailable(`Cannot reach GitHub: ${describe(error)}`);
     }
   }
 
@@ -147,9 +182,9 @@ function client({ fetch, token }: GitHubOptions) {
     const text = typeof message === 'string' ? message : '';
     if (response.status === 404) throw new AtlasError(notFound);
     if ((response.status === 403 || response.status === 429) && /rate limit/i.test(text)) {
-      throw new AtlasError(`GitHub rate limit reached; ${token ? 'try again in a minute' : 'set GITHUB_TOKEN'}`);
+      throw new GitHubUnavailable(`GitHub rate limit reached; ${token ? 'try again in a minute' : 'set GITHUB_TOKEN'}`);
     }
-    if (response.status === 401) throw new AtlasError('GitHub rejected the token in GITHUB_TOKEN');
+    if (response.status === 401) throw new GitHubUnavailable('GitHub rejected the token in GITHUB_TOKEN');
     throw new AtlasError(`GitHub answered ${response.status} for ${url}${text && `: ${text}`}`);
   }
 

@@ -110,6 +110,12 @@ test('/api/scan, an error the CLI reports with exit code 1: 400 with its message
   const unknown = await scan('github.com/JetBrains/unknown');
   assert.equal(unknown.status, 400);
   assert.match(unknown.body.error, /JetBrains\/unknown/);
+  // An organization: the CLI's only.
+  assert.deepEqual(await scan('https://github.com/JetBrains/'), {
+    status: 400,
+    type: 'application/json; charset=utf-8',
+    body: { error: 'An organization is scanned by the CLI only: skill-atlas scan https://github.com/JetBrains/' },
+  });
 });
 
 test('/api/scan, anything else: 500 with the message', async () => {

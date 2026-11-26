@@ -3,7 +3,8 @@
 `--port 0` picks a free port. The server prints its URL. It shares the CLI's [stored scans](analysis.md#persistence).
 ## Architecture
 The core runs in the server; the page is a *thin client*: HTML, CSS and plain JavaScript, no framework, no build.
-- GitHub repositories and local directories, as `scan`
+- GitHub repositories and local directories, as `scan`; an [organization](analysis.md#organization) is the CLI's only:
+  a clear message, `400`
 - `GITHUB_TOKEN` stays in the server: the page never sees it
 - Local only: it listens on `127.0.0.1`, and answers only a `localhost`, `127.0.0.1` or `[::1]` host (`403` otherwise)
 ## The page

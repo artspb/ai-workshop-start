@@ -3,6 +3,7 @@
 import { readFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { AtlasError } from '../core/errors.ts';
+import { parseGitHubOwner } from '../core/github.ts';
 import { skillLink } from '../core/model.ts';
 import { scan, type ScanResult, type Source, type Store } from '../core/scan.ts';
 
@@ -72,6 +73,7 @@ async function handle(request: IncomingMessage, response: ServerResponse, option
 async function scanAnswer(input: string | null, { open, store }: WebOptions): Promise<[number, unknown]> {
   try {
     if (!input?.trim()) throw new AtlasError('Enter a GitHub URL or a directory');
+    if (parseGitHubOwner(input)) throw new AtlasError(`An organization is scanned by the CLI only: skill-atlas scan ${input.trim()}`);
     const { result, stored } = await scan(await open(input.trim()), store);
     return [200, answer(result, stored)];
   } catch (error) {
