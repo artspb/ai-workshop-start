@@ -20,7 +20,8 @@ gh api graphql -F owner='{owner}' -F repo='{repo}' -F n=<n> -f query='
     state isDraft isCrossRepository author { login __typename } baseRefName headRefOid mergeable mergeStateStatus
     commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
     comments(last: 100) { nodes { author { login __typename } body } }
-    reviews(last: 100) { nodes { databaseId author { login __typename } state body commit { oid } comments { totalCount } } }
+    reviews(last: 100) { nodes { databaseId author { login __typename } state body commit { oid }
+      comments(first: 100) { nodes { replyTo { id } } } } }
     reviewThreads(first: 100) { nodes { isResolved path line
       comments(first: 50) { nodes { author { login __typename } body } } } } } } }' > pr.json
 ```
@@ -41,12 +42,16 @@ Merge only when **every** check holds; at the first that fails, post nothing and
 2. **Code Review's latest review** (the last one by the kind above):
    - is on the head: `commit.oid` is `headRefOid`;
    - its summary starts with `Nothing blocks`, code-review's verdict when nothing does;
-   - it has **no findings**: `comments.totalCount` is 0, and the summary names none, no `path:line`,
-     no `**blocking**`, `**suggestion**` or `**question**`, no gap or risk it asks to change.
+   - it has **no findings**: none of its inline comments starts a thread (`replyTo` is `null`), and the summary names
+     none, no `path:line`, no `**blocking**`, `**suggestion**` or `**question**`, no gap or risk it asks to change.
+     A reply in an earlier thread (a "stays open", code-review section 4) is not a finding: check 3 reads that thread.
 3. **Every thread is resolved** (`isResolved`), whatever its last comment. Resolved is the one signal that a thread
    is settled: Code Review resolves the threads it is satisfied with (a fix, a **Not changed** it agrees with,
    a follow-up issue), and a person's resolve counts the same, as "fine as is". address-review never resolves one,
    so an open thread, even one ending in **Fixed in**, is not settled yet.
+   A resolve is not a submitted review, so it does not start this skill: a person who resolves the last open thread
+   merges the pull request too: nothing else runs on it, and the summary that left the thread open does not start
+   with `Nothing blocks` anyway.
 4. **No person** commented: every comment and review on the pull request is the bot's (login and `Bot`).
 5. **Nothing in flight**: no review in state `PENDING`.
 6. **Green and clean**: the head's `statusCheckRollup.state` is `SUCCESS` and `mergeStateStatus` is `CLEAN`.
@@ -73,7 +78,7 @@ jq --arg m "$M" 'def ar: gsub("(?m)^ {0,3}(`{3,}|~{3,})[^\\n]*\\n[\\s\\S]*?(^ {0
   | { bot_pr:    (($p | bot) and ($p.isDraft | not) and ($p.isCrossRepository | not) and $p.state == "OPEN"),
       on_head:   ($cr.commit.oid == $p.headRefOid),
       nothing:   (($cr.body // "") | startswith("Nothing blocks")),
-      no_inline: ($cr.comments.totalCount == 0),
+      no_inline: ([$cr.comments.nodes[]? | select(.replyTo == null)] | length == 0 and $cr != null),
       resolved:  ([$p.reviewThreads.nodes[] | .isResolved] | all),
       bot_only:  ([$p.comments.nodes[], $p.reviews.nodes[] | bot] | all),
       no_pending: ([$p.reviews.nodes[] | .state != "PENDING"] | all),

@@ -77,8 +77,11 @@ gh api graphql -F owner='{owner}' -F repo='{repo}' -F n=<n> -f query='
   ```
 - **Leave it open**, and reply once in it saying why, when you are not satisfied: in particular when a **blocking**
   finding is not fixed, or when the answer hands a decision to a person (a choice the spec leaves open).
-  No reply in a thread whose last comment is already yours, without the marker (nothing new to judge), nor in one
-  a person commented in: that is theirs.
+  The reply ends with Code Review's marker, on a line of its own: `<!-- code-review: stays open -->`. address-review
+  does not answer a thread that ends in it, so the thread waits for a person, or for a push that fixes it (you resolve
+  it then, on that re-review), instead of starting another round of answers and re-reviews.
+  No reply in a thread whose last comment is already yours, without address-review's marker (nothing new to judge),
+  nor in one a person commented in: that is theirs.
 - Resolve in the same run as the summary, so the summary and the resolved threads describe the same state;
   the replies go in the same review as the summary (section 6).
 
@@ -124,7 +127,9 @@ gh api repos/{owner}/{repo}/pulls/<n>/reviews --method POST --input review.json
 - `line` is the line in the new file; a range adds `start_line`.
 - **With replies** to earlier threads (section 4): a reply of its own is a review of its own, and starts
   address-review before your summary is there. So post the same JSON **without** `event`: the review stays
-  `PENDING`. Add each reply to it, then submit it with the event and the summary; a 422 at the submit is handled as above:
+  `PENDING`, with the summary as its body from the start. Keep it there: address-review (the same user) takes a
+  pending review with an empty body, or with its marker, as its own stranded round, and leaves one with a body like yours.
+  Add each reply to it, then submit it with the event and the summary; a 422 at the submit is handled as above:
   ```sh
   R=$(gh api repos/{owner}/{repo}/pulls/<n>/reviews --method POST --input review.json --jq '.id,.node_id' | paste -sd' ')
   gh api graphql -f r="${R#* }" -f t=<thread id> -f b='<why it stays open>' -f query='
