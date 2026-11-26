@@ -7,9 +7,10 @@ export type Source = {
   repository: Repository;
   /**
    * Every file path, relative to the repository root, and what listing them had to leave out.
-   * Listed only when the scan runs: a stored result needs no listing.
+   * Listed only when the scan runs: a stored result needs no listing. `storable: false`: the
+   * listing does not follow from the commit alone (code search), so the result is not stored.
    */
-  list(): Promise<{ paths: string[]; warnings: string[] }>;
+  list(): Promise<{ paths: string[]; warnings: string[]; storable?: boolean }>;
   /** The file's bytes, or undefined if it is not there. */
   read(path: string): Promise<Uint8Array | undefined>;
   /**
@@ -62,16 +63,17 @@ export type Scanned = { result: ScanResult; stored: string | null };
  * stored result. A failed scan is not stored.
  */
 export async function scan(source: Source, store?: Store): Promise<Scanned> {
-  if (!store || !source.key) return { result: await scanFiles(source), stored: null };
+  if (!store || !source.key) return { result: (await scanFiles(source)).result, stored: null };
   const id = store.id(source.key);
   const ref = source.ref ?? '';
   const hit = await store.get(source.key);
   if (hit) return { result: hit, stored: (await store.addRef(source.key, ref)) ? id : null };
-  const result = await scanFiles(source);
+  const { result, storable } = await scanFiles(source);
+  if (!storable) return { result, stored: null };
   return { result, stored: (await store.set(source.key, { ref, result })) ? id : null };
 }
 
-async function scanFiles(source: Source): Promise<ScanResult> {
+async function scanFiles(source: Source): Promise<{ result: ScanResult; storable: boolean }> {
   const listed = await source.list();
   const files = findSkills(listed.paths);
   // The files are read at the same time: on GitHub, each one is a request.
@@ -103,5 +105,6 @@ async function scanFiles(source: Source): Promise<ScanResult> {
       copies: [],
     });
   }
-  return { repository: source.repository, skills: sortSkills([...skills.values()]), warnings };
+  const result = { repository: source.repository, skills: sortSkills([...skills.values()]), warnings };
+  return { result, storable: listed.storable !== false };
 }
