@@ -19,6 +19,8 @@ The first that applies:
   only the bot and the workflow commented; no pending review)
   - its summary names a `path:line` or a label → start **Merge Reviewed**: whether it is a finding needs judgement
   - a summary with neither is taken as it is: a finding it states in words only, or with a path and no line, is merged
+    (the owner's choice, #62): an agent on every summary that names a file would cost one on nearly every completion;
+    Code Review labels every finding in its summary instead (code-review, section 5)
   - the conflict on this head is already handed over (merge-when-reviewed's `conflict:<head>` marker) → *nothing*
   - a check fails → *nothing*
   - the checks run, or GitHub's merge state is `UNKNOWN` → *wait*: read again every 20 seconds, up to 15 minutes; then *nothing*

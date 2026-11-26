@@ -232,11 +232,22 @@ test('a completed review in another merge state: nothing; how far behind unknown
   assert.equal(decide(recorded(COMPLETED), { review: LIGHT_CHECK }).decision, 'wait');
 });
 
-test('a completed review whose summary states a finding with no path:line and no label is merged as it is', () => {
+test('a completed review whose summary states a finding with no path:line and no label is merged as it is, a file named without a line too', () => {
   const answer = recorded(COMPLETED, (pr) => {
     pr.reviews.nodes.at(-1)!.body = 'Nothing blocks the merge. The main risk is small: a long name may wrap in the panel.';
   });
   assert.equal(decide(answer, { review: LIGHT_CHECK, behind: 0 }).decision, 'merge');
+  // The owner's choice (#62): a file named without a line is merged too; Code Review labels a finding instead.
+  const file = recorded(COMPLETED, (pr) => {
+    pr.reviews.nodes.at(-1)!.body = 'Nothing blocks the merge. `spec/web.md` and `tests/visual/page-linux.png` are unchanged.';
+  });
+  assert.equal(decide(file, { review: LIGHT_CHECK, behind: 0 }).decision, 'merge');
+  const labelled = recorded(COMPLETED, (pr) => {
+    pr.reviews.nodes.at(-1)!.body = 'Nothing blocks the merge. **suggestion** `tests/visual/page-linux.png` also moved the footer.';
+  });
+  assert.deepEqual(decide(labelled, { review: LIGHT_CHECK, behind: 0 }).start, ['merge-when-reviewed']);
+  const review = readFileSync(`${REPOSITORY}.agents/skills/code-review/SKILL.md`, 'utf8');
+  assert.match(review, /\*\*A finding in the summary\*\* starts with its label too/);
 });
 
 test('workflow_dispatch on a head Code Review has not reviewed: start Code Review; a review event on it: nothing', () => {
