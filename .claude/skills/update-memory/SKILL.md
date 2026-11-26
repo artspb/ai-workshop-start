@@ -50,9 +50,10 @@ in it. A note that fails it would turn the pull request's CI red: fix the note, 
 ## Only notes
 code-review and merge-when-reviewed never review a note: a change that is only notes asks nothing of them.
 From `<from>` to `<head>` the change is only notes when this exits 0: `<head>` contains `<from>`, and every path it
-changed, a rename's old path too, is in `memory/`:
+changed, a rename's old path too, is in `memory/`. Its paths are anchored at the repository's root (`:(top)`), so
+it gives the same answer from any directory of the checkout:
 ```sh
-git merge-base --is-ancestor <from> <head> && test -z "$(git diff --no-renames --name-only <from> <head> -- . ':(exclude)memory/')"
+git merge-base --is-ancestor <from> <head> && test -z "$(git diff --no-renames --name-only <from> <head> -- ':(top)' ':(top,exclude)memory/')"
 ```
 Both commits must be fetched, with the history (`git fetch $([ "$(git rev-parse --is-shallow-repository)" = true ] && echo --unshallow) origin <from> <head>`):
 an Air checkout is shallow.
