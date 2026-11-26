@@ -801,6 +801,30 @@ test('GraphQL refused: the rate limit, RATE_LIMITED in its errors too, or a reje
   });
 });
 
+test('GitHub unreachable on a GraphQL query → the scan stops, exit code 1, no repository scanned', async (t) => {
+  const answers = replayGraphQL(bigRecording());
+  const asked: string[] = [];
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  const fetch: Fetch = (url, init) => {
+    asked.push(url);
+    return url === `${API}/graphql` ? Promise.reject(new TypeError('fetch failed')) : answers(url, init);
+  };
+  const code = await run(['scan', 'github.com/Big'], {
+    open: () => Promise.reject(new Error('not opened by input')),
+    openOrganization: (input) => openGitHubOwner(input, { fetch, token: 'test' }),
+    store: temporaryStore(t),
+    print: (text) => stdout.push(text),
+    error: (text) => stderr.push(text),
+    serve: () => Promise.reject(new Error('not served')),
+  });
+  assert.equal(code, 1);
+  assert.equal(stdout.join('\n'), '');
+  assert.equal(stderr.join('\n'), 'Cannot reach GitHub: fetch failed');
+  // Not as a failed query: no REST commit request, no tree.
+  assert.deepEqual(asked, [...LISTED, `${API}/graphql`]);
+});
+
 test('progress and Stop count every repository, a stored one too; a query is asked only once the scan reaches it', async (t) => {
   const store = temporaryStore(t);
   assert.equal((await scanBig(bigRecording(), store)).code, 0);
