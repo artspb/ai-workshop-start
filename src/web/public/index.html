@@ -18,17 +18,17 @@
         <button type="submit">Scan</button>
         <button id="stop" type="button" hidden>Stop</button>
       </form>
-    </header>
-    <main>
       <p id="status" role="status" hidden></p>
-      <details id="history" open hidden>
-        <summary><h2>Scanned before</h2></summary>
-        <input id="search" type="search" autocomplete="off" placeholder="Search every stored scan by name, description or repository" aria-label="Search every stored scan" />
-        <p id="none" hidden>No skill in a stored scan matches.</p>
-        <ul id="found" hidden></ul>
-        <p id="more" hidden></p>
-        <ul id="scans"></ul>
-      </details>
+    </header>
+    <details id="history" open hidden>
+      <summary><h2>Scanned before</h2></summary>
+      <input id="search" type="search" autocomplete="off" placeholder="Search every stored scan by name, description or repository" aria-label="Search every stored scan" />
+      <p id="none" hidden>No skill in a stored scan matches.</p>
+      <ul id="found" hidden></ul>
+      <p id="more" hidden></p>
+      <ul id="scans"></ul>
+    </details>
+    <main>
       <progress id="progress" hidden></progress>
       <section id="result" hidden>
         <div class="summary">

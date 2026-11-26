@@ -33,8 +33,10 @@ The core runs in the server; the page is a *thin client*: HTML, CSS and plain Ja
 - **Scanned before**: every [stored scan](analysis.md#persistence), the latest first: the repository, the commit,
   every ref asked for (`main (default branch)`, a `/tree/<ref>`), the skill count, the warning count and when;
   only the stored scan on the page is marked, by its id
-  - Under the box and the status, before the progress bar and the result; it collapses on its title: open at first,
-    then as the user leaves it, across scans
+  - A *side panel*, on the left, beside the box and the result: in view as the result scrolls, its list scrolling on its own;
+    a window narrower than **60rem** has no room for it: there, under the box and the status, above the progress bar and the result
+  - The status under the box, the progress bar under the status, then the result, whatever the panel holds
+  - It collapses on its title: open at first, then as the user leaves it, across scans; collapsed, the result keeps its place
   - One opens *as stored*, without GitHub: `/?scan=<id>`; the box then holds `<repository URL>/tree/<commit>`
   - Updated after each scan; hidden while nothing is stored
 - **Search** every stored scan, in **Scanned before**, above its list: the CLI does not
