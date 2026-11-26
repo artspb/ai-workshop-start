@@ -165,6 +165,9 @@ gh api graphql -F owner='{owner}' -F repo='{repo}' -F n=<n> -f query='
   - says **how to reproduce**: the command or the input, what happens, what should happen. A failing test is better still.
   - gives the fix only when it is short, as a ```` ```suggestion ```` block the author applies in one click
 - **Only lines in the diff** take an inline comment; GitHub rejects the others. A finding elsewhere goes in the summary, as `path:line`.
+- **A finding in the summary** starts with its label too, and names its `path:line`, or its path when it has no line:
+  the Automations workflow sends a completed review whose summary names a `path:line` or a label to Merge Reviewed,
+  and merges one with neither as it is ([spec/automations.md](../../../spec/automations.md)).
 
 ## 6. Post
 One review, through the API, so the author gets one notification:
