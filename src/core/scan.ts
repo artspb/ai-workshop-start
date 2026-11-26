@@ -17,14 +17,32 @@ export type Source = {
    * A source with a key is scanned once per store; without one, every time.
    */
   key?: string;
+  /** How the files are listed, for people: `code search`, `tree`. */
+  listing?: string;
 };
 
 export type ScanResult = { repository: Repository; skills: Skill[]; warnings: string[] };
 
+/** A stored scan, as the list of earlier scans shows it. */
+export type StoredScan = {
+  /** Opens the stored result with `Store.open`. */
+  id: string;
+  repository: Repository;
+  listing: string;
+  skills: number;
+  warnings: number;
+  /** When it was scanned, an ISO 8601 time. */
+  scannedAt: string;
+};
+
 /** Where results are kept between scans, by the source's key. */
 export type Store = {
   get(key: string): Promise<ScanResult | undefined>;
-  set(key: string, result: ScanResult): Promise<void>;
+  set(key: string, scan: { listing: string; result: ScanResult }): Promise<void>;
+  /** Every stored scan, the latest first. */
+  list(): Promise<StoredScan[]>;
+  /** A stored scan's result by its id, or undefined. */
+  open(id: string): Promise<ScanResult | undefined>;
 };
 
 /**
@@ -36,7 +54,7 @@ export async function scan(source: Source, store?: Store): Promise<ScanResult> {
   const stored = await store.get(source.key);
   if (stored) return stored;
   const result = await scanFiles(source);
-  await store.set(source.key, result);
+  await store.set(source.key, { listing: source.listing ?? '', result });
   return result;
 }
 

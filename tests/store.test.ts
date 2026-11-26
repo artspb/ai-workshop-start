@@ -206,3 +206,93 @@ test('where the store is: SKILL_ATLAS_CACHE, else $XDG_CACHE_HOME/skill-atlas, e
   assert.equal(cacheDirectory({ XDG_CACHE_HOME: '/tmp/b' }), '/tmp/b/skill-atlas');
   assert.match(cacheDirectory({}), /\/\.cache\/skill-atlas$/);
 });
+
+test('every stored scan, the latest first: repository, commit, listing, counts and when', async (t) => {
+  const directory = storeDirectory(t);
+  let clock = Date.parse('2026-11-26T10:00:00Z');
+  const store = openStore(directory, () => new Date(clock));
+  assert.deepEqual(await store.list(), []);
+  const open = (input: string, head: string, token?: string) => openGitHub(input, { fetch: replay(github(head)), token });
+  await scan(await open('github.com/JetBrains/example', MAIN, 'test'), store);
+  clock += 60_000;
+  await scan(await open('github.com/JetBrains/example', NEXT), store);
+  clock += 60_000;
+  await scan(await open('github.com/JetBrains/example', NEXT), store); // stored: not scanned again, its time stays
+  await scan(await openDirectory(FIXTURE), store); // a local directory: not stored
+
+  const scans = await store.list();
+  assert.deepEqual(
+    scans.map(({ id, ...rest }) => (assert.match(id, /^[0-9a-f]{64}$/), rest)),
+    [
+      {
+        repository: { id: 'JetBrains/example', organization: 'JetBrains', name: 'example', url: 'https://github.com/JetBrains/example', commit: NEXT },
+        listing: 'tree',
+        skills: 1,
+        warnings: 0,
+        scannedAt: '2026-11-26T10:01:00.000Z',
+      },
+      {
+        repository: { id: 'JetBrains/example', organization: 'JetBrains', name: 'example', url: 'https://github.com/JetBrains/example', commit: MAIN },
+        listing: 'code search',
+        skills: 1,
+        warnings: 0,
+        scannedAt: '2026-11-26T10:00:00.000Z',
+      },
+    ],
+  );
+  // Each opens as stored, by its id; another id, none.
+  assert.equal((await store.open(scans[1].id))?.skills[0].description, 'As of the first commit.');
+  for (const id of ['0'.repeat(64), '../package', scans[0].id.toUpperCase()]) assert.equal(await store.open(id), undefined, id);
+});
+
+test('the list skips what is not a stored scan: a corrupt file, another file', async (t) => {
+  const directory = storeDirectory(t);
+  await atlas(['scan', 'github.com/JetBrains/example'], { directory });
+  writeFileSync(join(directory, `${'a'.repeat(64)}.json`), '{ not json');
+  writeFileSync(join(directory, 'notes.txt'), 'mine');
+  const scans = await openStore(directory).list();
+  assert.deepEqual(scans.map((stored) => stored.repository.commit), [MAIN]);
+  assert.deepEqual(await openStore(join(directory, 'missing')).list(), []);
+});
+
+test('/api/scans: the stored scans; /api/scans/<id>: one, as /api/scan answers it, without GitHub', async (t) => {
+  const directory = storeDirectory(t);
+  const requests: string[] = [];
+  const recorded = replay(github(MAIN));
+  const fetch = (url: string) => (requests.push(url), recorded(url));
+  const server = createWebServer({ open: (input) => openGitHub(input, { fetch }), store: openStore(directory) });
+  const base = await listen(server, 0);
+  t.after(() => server.close());
+  const get = async (path: string) => {
+    const response = await globalThis.fetch(`${base}${path}`);
+    return { status: response.status, type: response.headers.get('content-type'), body: (await response.json()) as any };
+  };
+
+  assert.deepEqual(await get('/api/scans'), { status: 200, type: 'application/json; charset=utf-8', body: { scans: [] } });
+  const scanned = await get(`/api/scan?repo=${encodeURIComponent('github.com/JetBrains/example')}`);
+  assert.equal(scanned.status, 200);
+  const { scans } = (await get('/api/scans')).body;
+  assert.equal(scans.length, 1);
+  assert.deepEqual(Object.keys(scans[0]), ['id', 'repository', 'listing', 'skills', 'warnings', 'scannedAt']);
+  assert.equal(scans[0].repository.commit, MAIN);
+  assert.equal(scans[0].skills, 1);
+  assert.ok(!Number.isNaN(Date.parse(scans[0].scannedAt)));
+
+  requests.length = 0;
+  const opened = await get(`/api/scans/${scans[0].id}`);
+  assert.deepEqual(opened, { ...scanned, type: 'application/json; charset=utf-8' });
+  assert.deepEqual(requests, []);
+
+  for (const id of ['0'.repeat(64), 'nope']) {
+    assert.deepEqual(await get(`/api/scans/${id}`), { status: 404, type: 'application/json; charset=utf-8', body: { error: `No stored scan: ${id}` } });
+  }
+  assert.equal((await globalThis.fetch(`${base}/api/scans/..%2Fpackage`)).status, 404);
+});
+
+test('/api/scans without a store: none', async (t) => {
+  const server = createWebServer({ open: openDirectory });
+  const base = await listen(server, 0);
+  t.after(() => server.close());
+  assert.deepEqual(await (await fetch(`${base}/api/scans`)).json(), { scans: [] });
+  assert.equal((await fetch(`${base}/api/scans/${'0'.repeat(64)}`)).status, 404);
+});
