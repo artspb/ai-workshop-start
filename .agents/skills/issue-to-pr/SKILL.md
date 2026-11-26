@@ -50,7 +50,7 @@ npm run typecheck && npm test && npm run e2e && ./skill-atlas scan ./fixture
 - `npm run e2e` needs `GITHUB_TOKEN`. When its output changes, every changed line in `tests/e2e/*.txt`
   must follow from the issue; only then rewrite them with `UPDATE=1 npm run e2e`, and say why in the pull request.
 - A skill copy in `.agents/skills` and `.claude/skills` stays byte-identical.
-- **Screenshots**: `npm run e2e` ends with the web view's visual tests (`npx playwright install --with-deps chromium` first).
+- **Screenshots**: `npm run e2e` ends with the web view's visual tests. Chromium comes from `.air/cloud/startup.sh`; where it did not run: `test -x "$(node -p "require('playwright').chromium.executablePath()")" || npx playwright install --with-deps chromium`.
   A failing screenshot shows its expected, actual and diff in `playwright-report/` (`npx playwright show-report`).
   - The issue changes the page on purpose: you, the author, accept the new screenshots. Look at each diff first: it shows
     the change the issue asked for, and nothing else. Then `npm run e2e:update`, here, on Linux in the cloud (never on a Mac:
