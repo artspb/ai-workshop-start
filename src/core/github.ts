@@ -181,11 +181,17 @@ function client({ fetch, token }: GitHubOptions) {
     const message = (body as { message?: unknown } | undefined)?.message;
     const text = typeof message === 'string' ? message : '';
     if (response.status === 404) throw new AtlasError(notFound);
-    if ((response.status === 403 || response.status === 429) && /rate limit/i.test(text)) {
-      throw new GitHubUnavailable(`GitHub rate limit reached; ${token ? 'try again in a minute' : 'set GITHUB_TOKEN'}`);
-    }
-    if (response.status === 401) throw new GitHubUnavailable('GitHub rejected the token in GITHUB_TOKEN');
-    throw new AtlasError(`GitHub answered ${response.status} for ${url}${text && `: ${text}`}`);
+    if ((response.status === 403 || response.status === 429) && /rate limit/i.test(text)) throw rateLimit();
+    throw failure(response.status, url, text);
+  }
+
+  const rateLimit = () => new GitHubUnavailable(`GitHub rate limit reached; ${token ? 'try again in a minute' : 'set GITHUB_TOKEN'}`);
+
+  /** GitHub answers no more requests: these stop an organization scan. Any other failure is one repository's. */
+  function failure(status: number, url: string, text = ''): AtlasError {
+    if (status === 429) return rateLimit();
+    if (status === 401) return new GitHubUnavailable('GitHub rejected the token in GITHUB_TOKEN');
+    return new AtlasError(`GitHub answered ${status} for ${url}${text && `: ${text}`}`);
   }
 
   return {
@@ -196,9 +202,10 @@ function client({ fetch, token }: GitHubOptions) {
     },
     /** A file's bytes at the scanned commit, or undefined if it is not there. */
     async raw(url: string): Promise<Uint8Array | undefined> {
-      const response = await get(url);
+      // A private repository's files are read with the token too: without it, they answer 404.
+      const response = await get(url, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
       if (response.status === 404) return undefined;
-      if (!response.ok) throw new AtlasError(`GitHub answered ${response.status} for ${url}`);
+      if (!response.ok) throw failure(response.status, url);
       return new Uint8Array(await response.arrayBuffer());
     },
   };

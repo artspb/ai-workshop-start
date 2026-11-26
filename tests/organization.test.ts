@@ -73,8 +73,13 @@ function recording(overrides: Recording = {}): Recording {
 /** `skill-atlas <args>` as the CLI runs it, with a token, GitHub answering from the recording; every URL asked for. */
 async function atlas(args: string[], { github = recording(), store = undefined as ReturnType<typeof openStore> | undefined } = {}) {
   const asked: string[] = [];
+  const authorized: string[] = []; // the URLs asked for with the token
   const answers = replay(github);
-  const fetch: Fetch = (url, init) => (asked.push(url), answers(url, init));
+  const fetch: Fetch = (url, init) => {
+    asked.push(url);
+    if (init?.headers?.Authorization === 'Bearer test') authorized.push(url);
+    return answers(url, init);
+  };
   const stdout: string[] = [];
   const stderr: string[] = [];
   const code = await run(args, {
@@ -85,7 +90,7 @@ async function atlas(args: string[], { github = recording(), store = undefined a
     error: (text) => stderr.push(text),
     serve: () => Promise.reject(new Error('not served')),
   });
-  return { code, stdout: stdout.join('\n'), stderr: stderr.join('\n'), asked };
+  return { code, stdout: stdout.join('\n'), stderr: stderr.join('\n'), asked, authorized };
 }
 
 test('an organization: every repository, both pages of the list; each one with skills as scan prints it, sorted by name', async () => {
@@ -167,6 +172,62 @@ test('the rate limit in one repository: the scan stops, exit code 1', async () =
   // It stops: the repositories not started yet are not asked for, not even later.
   await new Promise((resolve) => setTimeout(resolve, 100));
   assert.ok(!scanned.asked.includes(`${API}/repos/JetBrains/zeta`), 'the last repository was not scanned');
+});
+
+test('a rate limit on a file read: the scan stops, exit code 1', async () => {
+  const file = `https://raw.githubusercontent.com/JetBrains/zeta/${commitOf('zeta')}/.claude/skills/release/SKILL.md`;
+  const scanned = await atlas(['scan', 'github.com/JetBrains'], { github: recording({ [file]: { status: 429, body: '429: Too Many Requests' } }) });
+  assert.equal(scanned.code, 1);
+  assert.equal(scanned.stdout, '');
+  assert.equal(scanned.stderr, 'GitHub rate limit reached; try again in a minute');
+});
+
+test('a rejected token: the scan stops, exit code 1', async () => {
+  const scanned = await atlas(['scan', 'github.com/JetBrains'], {
+    github: recording({ [`${API}/repos/JetBrains/Alpha`]: { status: 401, body: { message: 'Bad credentials' } } }),
+  });
+  assert.equal(scanned.code, 1);
+  assert.equal(scanned.stdout, '');
+  assert.equal(scanned.stderr, 'GitHub rejected the token in GITHUB_TOKEN');
+});
+
+test('GitHub unreachable: the scan stops, exit code 1', async () => {
+  const github = recording();
+  delete github[`${API}/repos/JetBrains/beta`]; // not recorded: the fetch fails, as without a network
+  const scanned = await atlas(['scan', 'github.com/JetBrains'], { github });
+  assert.equal(scanned.code, 1);
+  assert.equal(scanned.stdout, '');
+  assert.match(scanned.stderr, /^Cannot reach GitHub: not recorded: /);
+});
+
+test('a branch gone since the list: a warning, the others go on', async () => {
+  const scanned = await atlas(['scan', 'github.com/JetBrains'], {
+    github: recording({ [`${API}/repos/JetBrains/zeta/commits/main`]: { status: 404, body: { message: 'No commit found for SHA: main' } } }),
+  });
+  assert.equal(scanned.code, 0, scanned.stderr);
+  assert.equal(scanned.stdout.split('\n')[0], 'JetBrains · 101 repositories · 3 skills');
+  assert.ok(!scanned.stdout.includes('JetBrains/zeta'));
+  assert.ok(scanned.stdout.includes('JetBrains/kotlin · 1 skill'));
+  assert.ok(scanned.stderr.includes('warning: JetBrains/zeta: Not found in https://github.com/JetBrains/zeta: main'), scanned.stderr);
+});
+
+test('with a token, every request carries it, a file read too: a private repository is read', async () => {
+  const scanned = await atlas(['scan', 'github.com/JetBrains']);
+  assert.equal(scanned.code, 0, scanned.stderr);
+  assert.ok(scanned.asked.some((url) => url.startsWith('https://raw.githubusercontent.com/')));
+  assert.deepEqual(
+    scanned.asked.filter((url) => !scanned.authorized.includes(url)),
+    [],
+  );
+  // A private repository's file answers 404 without the token: with it, the skill is read.
+  const file = `https://raw.githubusercontent.com/JetBrains/zeta/${commitOf('zeta')}/.claude/skills/release/SKILL.md`;
+  const answers = replay(recording());
+  const privately: Fetch = (url, init) =>
+    url === file && init?.headers?.Authorization !== 'Bearer test'
+      ? Promise.resolve(new Response('404: Not Found', { status: 404 }))
+      : answers(url, init);
+  const source = await openGitHub('github.com/JetBrains/zeta/tree/main', { fetch: privately, token: 'test' });
+  assert.ok(await source.read('.claude/skills/release/SKILL.md'));
 });
 
 test('each repository is a stored scan of its own; the list of repositories is asked for every time', async (t) => {
