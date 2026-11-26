@@ -7,17 +7,19 @@ export type Source = {
   repository: Repository;
   /**
    * Every file path, relative to the repository root, and what listing them had to leave out.
-   * Listed only when the scan runs: a stored result needs no listing. `storable: false`: the
-   * listing does not follow from the commit alone (code search), so the result is not stored.
+   * Listed only when the scan runs: a stored result needs no listing. `key`: the one of `keys`
+   * the result is stored under; none when the listing does not follow from the commit alone
+   * (code search).
    */
-  list(): Promise<{ paths: string[]; warnings: string[]; storable?: boolean }>;
+  list(): Promise<{ paths: string[]; warnings: string[]; key?: string }>;
   /** The file's bytes, or undefined if it is not there. */
   read(path: string): Promise<Uint8Array | undefined>;
   /**
-   * Everything the result depends on, when it cannot change: a commit and how it was listed.
-   * A source with a key is scanned once per store; without one, every time.
+   * Where a stored result for this source may be, in order: each key is everything a result
+   * depends on, when it cannot change, a commit and how it was listed. How it is listed is only
+   * known once listed, so the listing says which one it is. Without keys, scanned every time.
    */
-  key?: string;
+  keys?: string[];
   /** What was asked for, for people: `main (default branch)`, or the ref of `/tree/<ref>`. */
   ref?: string;
 };
@@ -63,17 +65,18 @@ export type Scanned = { result: ScanResult; stored: string | null };
  * stored result. A failed scan is not stored.
  */
 export async function scan(source: Source, store?: Store): Promise<Scanned> {
-  if (!store || !source.key) return { result: (await scanFiles(source)).result, stored: null };
-  const id = store.id(source.key);
+  if (!store || !source.keys?.length) return { result: (await scanFiles(source)).result, stored: null };
   const ref = source.ref ?? '';
-  const hit = await store.get(source.key);
-  if (hit) return { result: hit, stored: (await store.addRef(source.key, ref)) ? id : null };
-  const { result, storable } = await scanFiles(source);
-  if (!storable) return { result, stored: null };
-  return { result, stored: (await store.set(source.key, { ref, result })) ? id : null };
+  for (const key of source.keys) {
+    const hit = await store.get(key);
+    if (hit) return { result: hit, stored: (await store.addRef(key, ref)) ? store.id(key) : null };
+  }
+  const { result, key } = await scanFiles(source);
+  if (!key) return { result, stored: null };
+  return { result, stored: (await store.set(key, { ref, result })) ? store.id(key) : null };
 }
 
-async function scanFiles(source: Source): Promise<{ result: ScanResult; storable: boolean }> {
+async function scanFiles(source: Source): Promise<{ result: ScanResult; key?: string }> {
   const listed = await source.list();
   const files = findSkills(listed.paths);
   // The files are read at the same time: on GitHub, each one is a request.
@@ -106,5 +109,5 @@ async function scanFiles(source: Source): Promise<{ result: ScanResult; storable
     });
   }
   const result = { repository: source.repository, skills: sortSkills([...skills.values()]), warnings };
-  return { result, storable: listed.storable !== false };
+  return { result, key: listed.key };
 }

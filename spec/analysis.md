@@ -22,8 +22,11 @@ a regular file named exactly `SKILL.md` at **`<root>/<name>/SKILL.md`**.
   The same `<name>` with different bytes: *two skills*.
 ## Persistence
 A GitHub scan listed through its **tree** is **stored**, with `GITHUB_TOKEN` or without; the same repository at the same commit is not scanned again.
-- The key: the repository, the **resolved commit**, and what a tree too large for one answer would list: for a `/tree/<ref>`, the roots;
-  for the default branch, the roots with a warning worded for it, or code search with `GITHUB_TOKEN`. A branch that moved is a new commit, a new scan
+- The key: the repository, the **resolved commit**, and how it was listed; a branch that moved is a new commit, a new scan
+  - A tree in **one answer** lists the same for every ref, with `GITHUB_TOKEN` or without: **one stored scan**
+  - A tree **too large**: the roots, stored apart for a `/tree/<ref>` and for the default branch (the warning is worded for each);
+    with `GITHUB_TOKEN`, the default branch uses code search instead, never served the roots
+  - A scan an earlier version stored, for a `/tree/<ref>` or for the default branch without `GITHUB_TOKEN`, is found again
 - A **code search** scan is never stored: the index follows the default branch late, and may not have every skill of the commit yet;
   the next scan may find more
 - Each stored scan records **every ref asked for**, in order: `<branch> (default branch)`, the `<ref>` of `/tree/<ref>`;
