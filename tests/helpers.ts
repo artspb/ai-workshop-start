@@ -1,7 +1,8 @@
 // Runs the commands the way the CLI does, with GitHub answering from EXAMPLE below.
+import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { run } from '../src/commands.ts';
-import { openGitHub, parseGitHubUrl } from '../src/core/github.ts';
+import { openGitHub, parseGitHubUrl, type Fetch } from '../src/core/github.ts';
 import { replay, type Recording } from '../src/core/replay.ts';
 import { openDirectory } from '../src/local.ts';
 import { createWebServer, listen } from '../src/web/server.ts';
@@ -48,4 +49,33 @@ export async function atlas(args: string[]) {
     serve: (port) => listen(createWebServer({ open }), port),
   });
   return { code, stdout: stdout.join('\n'), stderr: stderr.join('\n') };
+}
+
+/**
+ * A fetch that answers from a recording, GraphQL too: a query for the default branches' commits is
+ * answered as GitHub would, from the recording's answers for each repository (`/repos/<id>` and its
+ * default branch's `/commits/<branch>`); a repository not recorded, or whose commit is not `200`, has
+ * no `defaultBranchRef`, as an empty one. A recording of `/graphql` itself answers every query instead.
+ */
+export function replayGraphQL(recording: Recording): Fetch {
+  const rest = replay(recording);
+  return async (url, init) => {
+    if (url !== 'https://api.github.com/graphql' || Object.hasOwn(recording, url)) return rest(url, init);
+    assert.equal(init?.method, 'POST');
+    if (!init.headers?.Authorization) return Response.json({ message: 'This endpoint requires you to be authenticated.' }, { status: 401 });
+    const { query } = JSON.parse(init.body ?? '{}') as { query: string };
+    const data: Record<string, unknown> = {};
+    for (const [, alias, owner, name] of query.matchAll(/(\w+): repository\(owner: "([^"]*)", name: "([^"]*)"\)/g)) {
+      const info = recording[`https://api.github.com/repos/${owner}/${name}`];
+      if (info?.status !== 200) {
+        data[alias] = null;
+        continue;
+      }
+      const branch = (info.body as { default_branch: string }).default_branch;
+      const commit = recording[`https://api.github.com/repos/${owner}/${name}/commits/${encodeURIComponent(branch)}`];
+      const oid = commit?.status === 200 ? (commit.body as { sha: string }).sha : undefined;
+      data[alias] = { defaultBranchRef: oid ? { name: branch, target: { oid } } : null };
+    }
+    return Response.json({ data });
+  };
 }

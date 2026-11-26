@@ -7,14 +7,23 @@ export type Organization = {
   /** The login, for example `JetBrains`. */
   id: string;
   url: string;
-  /** Each repository, `owner/name`, with the input that scans it at its default branch. */
-  repositories: { id: string; input: string }[];
+  /**
+   * Each repository, `owner/name`, with the input that scans it at its default branch; `open`, when
+   * given, opens that scan instead of the input, with what the list already knows.
+   */
+  repositories: { id: string; input: string; open?: () => Promise<Source> }[];
 };
 
 /** One repository of an organization: its result and its stored scan's id, or why it could not be scanned. */
 export type RepositoryScan =
   | { id: string; result: ScanResult; stored: string | null; error?: undefined }
   | { id: string; result?: undefined; stored?: undefined; error: string };
+
+/** The order repositories are scanned in: by name, case-insensitive. */
+export function byName(a: { id: string }, b: { id: string }): number {
+  const compare = (x: string, y: string) => (x < y ? -1 : x > y ? 1 : 0);
+  return compare(a.id.toLowerCase(), b.id.toLowerCase()) || compare(a.id, b.id);
+}
 
 /** Scanned at the same time: each repository mostly waits on GitHub. */
 const AT_A_TIME = 8;
@@ -34,10 +43,7 @@ export async function scanOrganization(
   signal?: AbortSignal,
   progress?: (scanned: number, repositories: number) => void,
 ): Promise<RepositoryScan[]> {
-  const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
-  const repositories = [...organization.repositories].sort(
-    (a, b) => compare(a.id.toLowerCase(), b.id.toLowerCase()) || compare(a.id, b.id),
-  );
+  const repositories = [...organization.repositories].sort(byName);
   const scans: RepositoryScan[] = new Array(repositories.length);
   let next = 0;
   let stopped = false;
@@ -46,9 +52,9 @@ export async function scanOrganization(
   async function worker() {
     while (!stopped && !signal?.aborted && next < repositories.length) {
       const index = next++;
-      const { id, input } = repositories[index];
+      const { id, input, open: openListed } = repositories[index];
       try {
-        scans[index] = { id, ...(await scan(await open(input), store)) };
+        scans[index] = { id, ...(await scan(await (openListed ? openListed() : open(input)), store)) };
       } catch (error) {
         if (error instanceof GitHubUnavailable || !(error instanceof AtlasError)) {
           stopped = true; // the repositories not started yet are not asked for

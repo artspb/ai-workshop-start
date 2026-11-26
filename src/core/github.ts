@@ -1,10 +1,10 @@
 import { AtlasError, GitHubUnavailable, RateLimited, resetTime } from './errors.ts';
 import { SKILL_ROOTS } from './find.ts';
-import type { Organization } from './organization.ts';
+import { byName, type Organization } from './organization.ts';
 import type { Source } from './scan.ts';
 
 /** The part of `fetch` the core uses, so tests and the browser can pass their own. */
-export type Fetch = (url: string, init?: { headers?: Record<string, string> }) => Promise<Response>;
+export type Fetch = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) => Promise<Response>;
 
 export type GitHubOptions = {
   fetch: Fetch;
@@ -37,7 +37,9 @@ export function parseGitHubOwner(input: string): string | undefined {
 
 /**
  * The owner's repositories, each one at its default branch, as `/tree/<default branch>`: an
- * organization's, every one the scan can see; a user's, the ones they own.
+ * organization's, every one the scan can see; a user's, the ones they own. Each one opens with the
+ * name and the default branch the list gives, no lookup; with a token, its commit comes from one
+ * GraphQL query per 100 repositories, in the scan's order. See spec/analysis.md#the-request-budget.
  */
 export async function openGitHubOwner(input: string, options: GitHubOptions): Promise<Organization> {
   const login = parseGitHubOwner(input);
@@ -49,19 +51,64 @@ export async function openGitHubOwner(input: string, options: GitHubOptions): Pr
   );
   const list =
     owner.type === 'Organization' ? `${API}/orgs/${owner.login}/repos?type=all` : `${API}/users/${owner.login}/repos?type=owner`;
-  const repositories = new Map<string, string>(); // pages can repeat a repository created while listing
+  const branches = new Map<string, string>(); // pages can repeat a repository created while listing
   for (let page = 1; ; page++) {
     const answer = await github.json<{ full_name: string; default_branch: string }[]>(`${list}&per_page=100&page=${page}`);
-    for (const { full_name: id, default_branch: branch } of answer) {
-      repositories.set(id, `https://github.com/${id}/tree/${encodeURIComponent(branch)}`);
-    }
+    for (const { full_name: id, default_branch: branch } of answer) branches.set(id, branch);
     if (answer.length < 100) break;
   }
+  // In the scan's order, so each GraphQL query is asked only once the scan reaches its repositories.
+  const listed = [...branches].map(([id, branch]) => ({ id, branch })).sort(byName);
+  const commitOf = options.token ? defaultCommits(github, listed) : undefined;
   return {
     id: owner.login,
     url: `https://github.com/${owner.login}`,
-    repositories: [...repositories].map(([id, input]) => ({ id, input })),
+    repositories: listed.map(({ id, branch }, index) => ({
+      id,
+      input: `https://github.com/${id}/tree/${encodeURIComponent(branch)}`,
+      // A client of its own: one repository's answers are not kept for the whole organization.
+      open: async () => openCommit(client(options), options, id, branch, branch, await commitOf?.(index)),
+    })),
   };
+}
+
+/** Repositories in one GraphQL query. */
+const QUERY_SIZE = 100;
+
+/**
+ * Each listed repository's default-branch commit, by its index, from one GraphQL query per 100,
+ * each asked once; undefined when GraphQL gives none for it, so it is asked for as without a token.
+ */
+function defaultCommits(github: Client, listed: { id: string; branch: string }[]): (index: number) => Promise<string | undefined> {
+  const queries = new Map<number, Promise<(string | undefined)[]>>();
+  return async (index) => {
+    const query = Math.floor(index / QUERY_SIZE);
+    if (!queries.has(query)) queries.set(query, queryCommits(github, listed.slice(query * QUERY_SIZE, (query + 1) * QUERY_SIZE)));
+    return (await queries.get(query)!)[index % QUERY_SIZE];
+  };
+}
+
+type BranchRef = { name?: unknown; target?: { oid?: unknown } | null } | null;
+
+async function queryCommits(github: Client, repositories: { id: string; branch: string }[]): Promise<(string | undefined)[]> {
+  const fields = repositories.map(({ id }, index) => {
+    const [owner, name] = id.split('/');
+    return `r${index}: repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(name)}) { defaultBranchRef { name target { oid } } }`;
+  });
+  let data: Record<string, { defaultBranchRef?: BranchRef } | null> | undefined;
+  try {
+    data = await github.graphql(`query { ${fields.join(' ')} }`);
+  } catch (error) {
+    // The query failed: its repositories are asked for one by one. GitHub answering no more stops the scan.
+    if (error instanceof GitHubUnavailable || !(error instanceof AtlasError)) throw error;
+    return [];
+  }
+  return repositories.map(({ branch }, index) => {
+    const ref = data?.[`r${index}`]?.defaultBranchRef;
+    const oid = ref?.target?.oid;
+    // Empty, no default branch, or another one than the list's: asked for as without a token.
+    return ref?.name === branch && typeof oid === 'string' && /^[0-9a-f]{40}$/.test(oid) ? oid : undefined;
+  });
 }
 
 /** Resolves the ref, or the default branch, to a commit and lists the files that may be skills. */
@@ -73,16 +120,34 @@ export async function openGitHub(input: string, options: GitHubOptions): Promise
     `${API}/repos/${name.owner}/${name.repo}`,
     `Repository not found: https://github.com/${name.owner}/${name.repo}`,
   );
-  const id = info.full_name;
-  const ref = name.ref ?? info.default_branch;
-  const { sha } = await github.json<{ sha: string }>(
-    `${API}/repos/${id}/commits/${encodeURIComponent(ref)}`,
-    `Not found in https://github.com/${id}: ${ref}`,
-    [404, 422], // 422: a ref that names no commit, "No commit found for SHA"
-  );
+  return openCommit(github, options, info.full_name, name.ref, info.default_branch);
+}
+
+/**
+ * The repository `id` at `ref`, or at its default branch without one: at `commit` when it is
+ * already known, else resolved.
+ */
+async function openCommit(
+  github: Client,
+  options: GitHubOptions,
+  id: string,
+  asked: string | undefined,
+  defaultBranch: string,
+  commit?: string,
+): Promise<Source> {
+  const ref = asked ?? defaultBranch;
+  const sha =
+    commit ??
+    (
+      await github.json<{ sha: string }>(
+        `${API}/repos/${id}/commits/${encodeURIComponent(ref)}`,
+        `Not found in https://github.com/${id}: ${ref}`,
+        [404, 422], // 422: a ref that names no commit, "No commit found for SHA"
+      )
+    ).sha;
   // The tree first: it is the commit's own. Code search, with a token, only for a default branch
   // whose tree is too large for one answer: the index sees only the default branch.
-  const searchable = Boolean(options.token) && !name.ref;
+  const searchable = Boolean(options.token) && !asked;
   const [organization, repo] = id.split('/');
   // The keys: a tree in one answer lists the same for every ref, with a token or without: one
   // stored scan. A tree too large lists the roots, with a warning worded for a ref or for the
@@ -94,7 +159,7 @@ export async function openGitHub(input: string, options: GitHubOptions): Promise
   const whole = key('whole tree');
   const search = searchable ? key('code search') : undefined;
   const earlier = [key('tree'), key('tree of the default branch')];
-  const roots = searchable ? undefined : earlier[name.ref ? 0 : 1];
+  const roots = searchable ? undefined : earlier[asked ? 0 : 1];
   return {
     repository: { id, organization, name: repo, url: `https://github.com/${id}`, commit: sha },
     async list() {
@@ -105,13 +170,13 @@ export async function openGitHub(input: string, options: GitHubOptions): Promise
         return { paths: searched.paths, warnings: [], key: searched.exact ? search : undefined };
       }
       const warnings: string[] = [];
-      return { paths: await rootPaths(github, id, sha, warnings, !name.ref), warnings, key: roots };
+      return { paths: await rootPaths(github, id, sha, warnings, !asked), warnings, key: roots };
     },
     read: (path) => github.raw(`${RAW}/${id}/${sha}/${encodePath(path)}`),
     keys: [whole, ...(search ? [search] : []), ...(roots ? [roots] : []), ...earlier.filter((other) => other !== roots)],
     serves: (stored, result) =>
       stored === whole || stored === search || stored === roots || !result.warnings[0]?.startsWith(TOO_LARGE),
-    ref: name.ref ?? `${info.default_branch} (default branch)`,
+    ref: asked ?? `${defaultBranch} (default branch)`,
   };
 }
 
@@ -239,7 +304,7 @@ function client({ fetch, token }: GitHubOptions) {
   if (token) headers.Authorization = `Bearer ${token}`;
   const answers = new Map<string, Promise<unknown>>(); // the root tree is asked for once per skill root
 
-  async function get(url: string, init?: { headers: Record<string, string> }): Promise<Response> {
+  async function get(url: string, init?: Parameters<Fetch>[1]): Promise<Response> {
     try {
       return await fetch(url, init);
     } catch (error) {
@@ -274,6 +339,21 @@ function client({ fetch, token }: GitHubOptions) {
     json<T>(url: string, notFound = `Not found on GitHub: ${url}`, missing = [404]): Promise<T> {
       if (!answers.has(url)) answers.set(url, request(url, notFound, missing));
       return answers.get(url) as Promise<T>;
+    },
+    /**
+     * A GraphQL answer's `data`, partial when some fields failed. The rate limit, a rejected token or
+     * GitHub unreachable stop the scan; any other failure is an AtlasError.
+     */
+    async graphql<T>(query: string): Promise<T> {
+      const url = `${API}/graphql`;
+      const response = await get(url, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ query }) });
+      const body = (await response.json().catch(() => undefined)) as { data?: T | null; errors?: { type?: unknown }[]; message?: unknown } | undefined;
+      const text = typeof body?.message === 'string' ? body.message : '';
+      if (Array.isArray(body?.errors) && body.errors.some((error) => error?.type === 'RATE_LIMITED')) throw rateLimit(response);
+      if ((response.status === 403 || response.status === 429) && /rate limit/i.test(text)) throw rateLimit(response);
+      if (!response.ok) throw failure(response, url, text);
+      if (!body?.data) throw new AtlasError(`GitHub answered no data for ${url}`);
+      return body.data;
     },
     /** A file's bytes at the scanned commit, or undefined if it is not there. */
     async raw(url: string): Promise<Uint8Array | undefined> {
