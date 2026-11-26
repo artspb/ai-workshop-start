@@ -31,7 +31,9 @@ a regular file named exactly `SKILL.md` at **`<root>/<name>/SKILL.md`**.
 - Each repository is a scan of its own: [stored](#persistence) as one, not scanned again at the same commit;
   the list of repositories is asked for every time
 - A repository that cannot be scanned (an empty one, a branch gone since the list) → a *warning*, the others go on
-- No such owner → a clear message, exit code 1; the rate limit, a rejected token, GitHub unreachable: the scan stops, exit code 1
+- No such owner → a clear message, exit code 1; the rate limit, a rejected token, GitHub unreachable: the scan stops, exit code 1,
+  on any request, a file read too
+- With `GITHUB_TOKEN`, every request carries it, a file read too: a private repository's files answer only with it
 - 8 repositories at a time
 ## Persistence
 A GitHub scan listed through its **tree** is **stored**; the same repository at the same commit is not scanned again.
