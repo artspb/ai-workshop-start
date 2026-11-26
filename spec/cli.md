@@ -1,6 +1,6 @@
 # Command line
 `./skill-atlas scan <GitHub URL | directory>`, the URL with an optional `/tree/<ref>`
-Prints the result **at once**; *nothing is stored*.
+Prints the result **at once**; a GitHub scan is stored, and the same commit is not scanned again: see [persistence](analysis.md#persistence).
 `GITHUB_TOKEN`, optional: a higher GitHub rate limit.
 ## Output
 ```

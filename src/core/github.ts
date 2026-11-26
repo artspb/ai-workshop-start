@@ -41,16 +41,19 @@ export async function openGitHub(input: string, options: GitHubOptions): Promise
     `${API}/repos/${id}/commits/${encodeURIComponent(ref)}`,
     `Not found in https://github.com/${id}: ${ref}`,
   );
-  const warnings: string[] = [];
   // Code search sees only the default branch: a ref is always listed through its tree.
   const search = options.token && !name.ref;
-  const paths = search ? await searchPaths(github, id) : await treePaths(github, id, sha, warnings, !name.ref);
   const [organization, repo] = id.split('/');
   return {
     repository: { id, organization, name: repo, url: `https://github.com/${id}`, commit: sha },
-    paths,
-    warnings,
+    async list() {
+      const warnings: string[] = [];
+      const paths = search ? await searchPaths(github, id) : await treePaths(github, id, sha, warnings, !name.ref);
+      return { paths, warnings };
+    },
     read: (path) => github.raw(`${RAW}/${id}/${sha}/${encodePath(path)}`),
+    // The commit cannot change; the listing can find more or less, and words its warning per input.
+    key: JSON.stringify(['github', id, sha, search ? 'search' : name.ref ? 'tree' : 'tree of the default branch']),
   };
 }
 

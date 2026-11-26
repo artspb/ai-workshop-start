@@ -1,14 +1,16 @@
 // The web view: the page, and the scan behind it as JSON. The core runs here, so the page can scan
-// local directories and never sees GITHUB_TOKEN. Local only; nothing is stored. See spec/web.md.
+// local directories and never sees GITHUB_TOKEN. Local only. See spec/web.md.
 import { readFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { AtlasError } from '../core/errors.ts';
 import { skillLink } from '../core/model.ts';
-import { scan, type Source } from '../core/scan.ts';
+import { scan, type Source, type Store } from '../core/scan.ts';
 
 export type WebOptions = {
   /** Opens what the page asked to scan, as the CLI does. */
   open(input: string): Promise<Source>;
+  /** Earlier scans, shared with the CLI; without one, every scan runs. */
+  store?: Store;
 };
 
 /** The page's files, by URL path; nothing else is served from disk. */
@@ -60,10 +62,10 @@ async function handle(request: IncomingMessage, response: ServerResponse, option
   response.writeHead(200, { 'content-type': page.type, 'cache-control': 'no-cache' }).end(body);
 }
 
-async function scanAnswer(input: string | null, { open }: WebOptions): Promise<[number, unknown]> {
+async function scanAnswer(input: string | null, { open, store }: WebOptions): Promise<[number, unknown]> {
   try {
     if (!input?.trim()) throw new AtlasError('Enter a GitHub URL or a directory');
-    const { repository, skills, warnings } = await scan(await open(input.trim()));
+    const { repository, skills, warnings } = await scan(await open(input.trim()), store);
     return [
       200,
       {
