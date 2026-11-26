@@ -50,7 +50,9 @@ A GitHub scan listed through its **tree** is **stored**, with `GITHUB_TOKEN` or 
   - **Index current**: every result on every page names the resolved commit, no page has `incomplete_results`, at most 1000 results → stored
   - **Index behind**: every result names one commit, an ancestor of the head: the compare to the head (`status: ahead`) catches it up → stored
   - Else **not stored**, and the next scan may find more: no result, results naming different commits, `incomplete_results`,
-    more than 1000 results, a compare not `ahead`, a compare of 300 files or more (it may not list them all), a `SKILL.md` changed otherwise
+    more than 1000 results, fewer paths than `total_count` (a repeated result pushed another out, or a page came short),
+    a compare that fails (404: GitHub no longer has the index commit; any other error answer), a compare not `ahead`,
+    a compare of 300 files or more (it may not list them all), a `SKILL.md` changed otherwise
   - Its own key, not the whole tree's: the index may skip a file the tree has (a large one); served only to code search
 - Each stored scan records **every ref asked for**, in order: `<branch> (default branch)`, the `<ref>` of `/tree/<ref>`;
   two refs at the same commit share one stored scan, scanned once; refs scanned at the same time in one process are all kept
@@ -71,7 +73,9 @@ Skill: id = `repo:path`, name, description, commit, copies
 - Code search sees only the default branch: a `/tree/<ref>` scan always lists the tree
 - **Catch-up**: an index behind the head, every result naming one commit, an ancestor: `compare/<index>...<head>`;
   its `SKILL.md` files `added` (or `copied`) are added, `removed` dropped, `renamed` moved; a skill added since the index commit is found.
-  Stored or not: an incomplete search is caught up too. One extra request, only when the index lags
+  Stored or not: an incomplete search is caught up too. One extra request, only when the index lags.
+  A compare that fails → the search list as it is, the scan goes on; only GitHub answering no more requests
+  (rate limit, rejected token, unreachable) stops it
 - The name: front matter, else the directory
 - The link pins the *scanned commit*; for a local directory, the file itself
 - Malformed or missing front matter → a *warning*, the scan goes on
