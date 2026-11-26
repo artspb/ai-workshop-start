@@ -76,7 +76,7 @@ For each finding, reproduce what it claims, as it says to:
 - **A choice the spec leaves open, or two reviewers disagree** → don't pick; say so for a person.
 - **Outdated** (`isOutdated`): check it against the current code; already fixed → say by which commit.
 
-Stay in the pull request's scope. A real problem outside it: open an issue (`gh issue create`) and link it in the answer.
+Stay in the pull request's scope. A real problem outside it: file an issue ([Filing an issue](#filing-an-issue)) and name it, `#<m>`, in the answer.
 
 ## 2. Verify
 Run the pull request's code without a write token in its environment; `gh` keeps its token for posting:
@@ -124,3 +124,21 @@ gh api graphql -f r="$R" -f b=$'<the round in a line; answers to review bodies>\
 ## 4. Green
 `gh pr checks <n> --watch`. Red: fix it in another `Address review` commit, if rounds are left; never skip or weaken a test.
 Never merge, never push to `main`, never dismiss a review.
+
+## Filing an issue
+Every skill that files an issue follows this section, word for word: the issue gets the **Delegate to AI** label
+at once, so the Delegate to AI automation (issue-to-pr) picks it up, with no person to notice it first.
+1. **No duplicate**: search the open issues first. One already covers it → comment there (`gh issue comment <m>`)
+   and file nothing: a duplicate would be implemented twice.
+   ```sh
+   gh issue list --search "<words> in:title" --state open
+   ```
+2. **File it, then label it in a second call**, not with `--label` on `gh issue create`: the automation runs on
+   `issues.labeled`, and a label added on its own fires that event for sure. A skill's own labels (a QA failure's `bug`)
+   may go in the same edit.
+   ```sh
+   M=$(gh issue create --title "<what is wrong>" --body-file issue.md | grep -o '[0-9]*$')
+   gh issue edit "$M" --add-label "Delegate to AI"
+   ```
+3. **Say which**: name the issue, `#<m>`, filed or commented on, in the skill's answer (the pull request's body,
+   the reply on the thread, the QA report).
