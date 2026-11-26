@@ -57,8 +57,12 @@ test('the page: Scanned before is a side panel, beside the box and the result, a
   const css = await (await fetch(`${base}/style.css`)).text();
   assert.ok(css.includes('@media (min-width: 60rem) {'), 'a window of 60rem or more has room for the panel');
   const wide = css.slice(css.indexOf('@media (min-width: 60rem) {'));
-  assert.match(wide, /body:has\(> #history:not\(\[hidden\]\)\) \{[^}]*display: grid;[^}]*grid-template-areas: "side header" "side main";/, 'on the left, beside the box and the result');
+  assert.match(wide, /body:has\(> #history:not\(\[hidden\]\)\) \{[^}]*display: grid;[^}]*grid-template-columns: 20rem [^}]*grid-template-areas: "side header" "side main";/, 'on the left, beside the box and the result, which keeps its place when the panel collapses');
   assert.match(wide, /#history \{[^}]*grid-area: side;[^}]*position: sticky;[^}]*max-height: calc\(100vh - [^}]*overflow-y: auto;/, 'in view as the result scrolls, scrolling on its own');
+  const height = wide.match(/#history summary \{[^}]*position: sticky; top: 0;[^}]*height: ([\d.]+rem);[^}]*background: Canvas;/);
+  assert.ok(height, 'the title stays at the top of the panel as its list scrolls');
+  assert.match(wide, new RegExp(`#search \\{[^}]*position: sticky; top: ${height[1]};[^}]*Canvas`), 'the search box, right under the title, stays too');
+  assert.match(css, /^#history li \{ overflow-wrap: anywhere; \}$/m, 'a long word wraps, in a row and in a search result');
 });
 
 test('an unknown path: 404; nothing else from disk', async () => {
