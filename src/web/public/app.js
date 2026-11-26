@@ -58,7 +58,9 @@ function showResult({ repository, skills: scanned, warnings }) {
   skills = scanned;
   const link = $('repository');
   link.textContent = repository.id;
-  link.href = repository.url;
+  // A browser does not open file:// from a page: a local directory's name is text.
+  if (repository.url.startsWith('file:')) link.removeAttribute('href');
+  else link.href = repository.url;
   $('count').textContent = `${scanned.length} ${scanned.length === 1 ? 'skill' : 'skills'}`;
   $('commit').textContent = repository.commit ? `at ${repository.commit.slice(0, 12)}` : 'local directory';
   $('commit').title = repository.commit;
