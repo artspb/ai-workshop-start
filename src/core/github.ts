@@ -1,6 +1,7 @@
 import { AtlasError, GitHubUnavailable, RateLimited, resetTime } from './errors.ts';
 import { SKILL_ROOTS } from './find.ts';
 import { byName, type Organization } from './organization.ts';
+import type { Meter } from './requests.ts';
 import type { Source } from './scan.ts';
 
 /** The part of `fetch` the core uses, so tests and the browser can pass their own. */
@@ -13,6 +14,8 @@ export type GitHubOptions = {
    * search; without one, only its skill roots are. Any tree in one answer is listed whole.
    */
   token?: string;
+  /** Counts the requests GitHub answers, and reads the quota left from them. */
+  meter?: Meter;
 };
 
 const API = 'https://api.github.com';
@@ -299,7 +302,8 @@ function files(tree: Tree): string[] {
 
 type Client = ReturnType<typeof client>;
 
-function client({ fetch, token }: GitHubOptions) {
+function client({ fetch: unmetered, token, meter }: GitHubOptions) {
+  const fetch = meter ? meter.wrap(unmetered) : unmetered;
   const headers: Record<string, string> = { Accept: 'application/vnd.github+json' };
   if (token) headers.Authorization = `Bearer ${token}`;
   const answers = new Map<string, Promise<unknown>>(); // the root tree is asked for once per skill root

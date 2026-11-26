@@ -17,7 +17,12 @@ export const RATE_LIMITED: Recording = {
   'https://api.github.com/repos/JetBrains/example': {
     status: 403,
     body: { message: 'API rate limit exceeded for 203.0.113.7.', documentation_url: 'https://docs.github.com/rest/rate-limit' },
-    headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(NOW.getTime() / 1000 + 20 * 60) },
+    headers: {
+      'x-ratelimit-limit': '60',
+      'x-ratelimit-remaining': '0',
+      'x-ratelimit-reset': String(NOW.getTime() / 1000 + 20 * 60),
+      'x-ratelimit-resource': 'core',
+    },
   },
 };
 

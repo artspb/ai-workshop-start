@@ -195,7 +195,10 @@ async function serve(t: { after(fn: () => unknown): void }, github: Recording, t
   return async (repo: string, progress = false) => {
     const response = await fetch(`${base}/api/scan?repo=${encodeURIComponent(repo)}${progress ? '&progress' : ''}`);
     const lines = (await response.text()).trimEnd().split('\n').map((line) => JSON.parse(line));
-    return { status: response.status, last: lines.at(-1) };
+    // Its requests and quota are checked in tests/requests.test.ts; here, the rest of the answer.
+    const { requests, quota, ...last } = lines.at(-1);
+    assert.ok(requests && quota !== undefined, 'every answer carries its requests and quota');
+    return { status: response.status, last };
   };
 }
 

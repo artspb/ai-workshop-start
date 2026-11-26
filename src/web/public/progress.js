@@ -1,4 +1,4 @@
-// A scan's progress and its Stop, in their own module so the tests can import it.
+// A scan's progress, its Stop and its GitHub requests, in their own module so the tests can import it.
 
 /**
  * What the page asks for to scan with progress: `/api/scan?…&progress`; a stored scan as it is.
@@ -10,9 +10,10 @@ export function progressUrl(request) {
 
 /**
  * The answer to /api/scan: JSON, or, for an organization with `progress`, NDJSON whose lines are
- * its progress, each one handed to `onProgress`, then the answer itself or `{ error }`.
+ * its progress, each one handed to `onProgress` with its whole line (its requests and quota too), then
+ * the answer itself or `{ error }`.
  * @param {Response} response
- * @param {(progress: { scanned: number, repositories: number }) => void} [onProgress]
+ * @param {(progress: { scanned: number, repositories: number }, line: { requests?: object, quota?: object | null }) => void} [onProgress]
  */
 export async function readAnswer(response, onProgress = () => {}) {
   if (!response.headers.get('content-type')?.startsWith('application/x-ndjson')) return response.json();
@@ -22,7 +23,7 @@ export async function readAnswer(response, onProgress = () => {}) {
   const read = (line) => {
     if (!line.trim()) return;
     const object = JSON.parse(line);
-    if (object.progress) onProgress(object.progress);
+    if (object.progress) onProgress(object.progress, object);
     else answer = object;
   };
   for (;;) {
@@ -72,8 +73,77 @@ export function errorText({ error, rateLimit }, now = Date.now(), { locale, ...f
   const resetsAt = rateLimit?.resetsAt ? Date.parse(rateLimit.resetsAt) : NaN;
   if (Number.isNaN(resetsAt)) return error;
   const minute = 60_000;
-  const time = new Date(Math.max(Math.ceil(resetsAt / minute), Math.floor(now / minute) + 1) * minute).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', ...format });
+  const time = resetClock(resetsAt, now, { locale, ...format });
   const minutes = Math.max(1, Math.ceil((resetsAt - now) / minute));
   const resets = `it resets at ${time} (in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'})`;
   return `GitHub rate limit reached; ${rateLimit.token ? resets : `set GITHUB_TOKEN, or wait: ${resets}`}`;
+}
+
+/**
+ * A reset time as the page shows it, in the viewer's local time and format, rounded up to the minute;
+ * one already past, the next minute, never a time behind the clock.
+ * @param {number} resetsAt
+ * @param {number} now
+ * @param {Intl.DateTimeFormatOptions & { locale?: string }} [format]
+ */
+function resetClock(resetsAt, now, { locale, ...format } = {}) {
+  const minute = 60_000;
+  return new Date(Math.max(Math.ceil(resetsAt / minute), Math.floor(now / minute) + 1) * minute).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', ...format });
+}
+
+/**
+ * The quota left, as GitHub's answers last told it: REST's (`core`), then GraphQL's points; each with
+ * when it resets. A limit whose reset is past has reset since: all of it left, no time. None seen: nothing.
+ * @param {Record<string, { remaining: number, limit: number, resetsAt: string }> | null | undefined} quota
+ * @param {number} now
+ * @param {Intl.DateTimeFormatOptions & { locale?: string }} format
+ * @returns {string[]}
+ */
+function quotaParts(quota, now, format) {
+  const number = (n) => n.toLocaleString(format.locale);
+  const part = (limit, unit) => {
+    const resetsAt = Date.parse(limit.resetsAt);
+    if (!(resetsAt > now)) return `${number(limit.limit)} of ${number(limit.limit)}${unit} left`;
+    return `${number(limit.remaining)} of ${number(limit.limit)}${unit} left, resets at ${resetClock(resetsAt, now, format)}`;
+  };
+  const parts = [];
+  if (quota?.core) parts.push(part(quota.core, ''));
+  if (quota?.graphql) parts.push(`GraphQL: ${part(quota.graphql, ' points')}`);
+  return parts;
+}
+
+/**
+ * A scan's GitHub requests and the quota left, under the box:
+ * `312 REST requests, 26 GraphQL queries, 1,904 file reads · 4,059 of 5,000 left, resets at 17:33`;
+ * none: `0 requests`, and a stored scan opened as stored, `0 requests, from the store`.
+ * In the viewer's local time and number format, unless a test picks them.
+ * @param {{ requests?: { rest: number, graphql: number, files: number }, quota?: Record<string, { remaining: number, limit: number, resetsAt: string }> | null, stored?: string | null }} answer
+ * @param {number} [now]
+ * @param {Intl.DateTimeFormatOptions & { locale?: string }} [format]
+ */
+export function requestsText({ requests, quota, stored }, now = Date.now(), format = {}) {
+  if (!requests) return '';
+  const number = (n) => n.toLocaleString(format.locale);
+  const { rest, graphql, files } = requests;
+  const counts =
+    rest + graphql + files === 0
+      ? `0 requests${stored ? ', from the store' : ''}`
+      : [
+          `${number(rest)} REST ${rest === 1 ? 'request' : 'requests'}`,
+          `${number(graphql)} GraphQL ${graphql === 1 ? 'query' : 'queries'}`,
+          `${number(files)} file ${files === 1 ? 'read' : 'reads'}`,
+        ].join(', ');
+  return [counts, ...quotaParts(quota, now, format)].join(' · ');
+}
+
+/**
+ * Before any scan: the quota the server last saw, `GitHub quota: 4,059 of 5,000 left, resets at 17:33`;
+ * '' when it saw none.
+ * @param {Record<string, { remaining: number, limit: number, resetsAt: string }> | null | undefined} quota
+ * @param {number} [now]
+ * @param {Intl.DateTimeFormatOptions & { locale?: string }} [format]
+ */
+export function quotaText(quota, now = Date.now(), format = {}) {
+  const parts = quotaParts(quota, now, format);
+  return parts.length ? `GitHub quota: ${parts.join(' · ')}` : '';
 }

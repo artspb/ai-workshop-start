@@ -16,6 +16,7 @@ In this order; [rate-limit](rate-limit.md) last.
 | [search](search.md) | the search across every stored scan |
 | [organization](organization.md) | an owner's repositories: the progress, the counts, each a stored scan |
 | [stop](stop.md) | **Stop** on an organization's scan |
+| [requests](requests.md) | a scan's GitHub requests by kind, and the quota left: fresh, stored, before any scan, as an organization scans |
 | [errors](errors.md) | a repository, an owner, a directory or a branch that does not exist |
 | [rate-limit](rate-limit.md) | GitHub's rate limit, without `GITHUB_TOKEN` |
 

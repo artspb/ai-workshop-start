@@ -312,8 +312,8 @@ test('a repository still scans as one, with an organization client', async () =>
 async function serve(t: { after(fn: () => unknown): void }, { github = recording(), store = undefined as ReturnType<typeof openStore> | undefined } = {}) {
   const fetch = replayGraphQL(github);
   const server = createWebServer({
-    open: (input) => openGitHub(input, { fetch, token: 'test' }),
-    openOrganization: (input) => (parseGitHubOwner(input) ? openGitHubOwner(input, { fetch, token: 'test' }) : undefined),
+    open: (input, meter) => openGitHub(input, { fetch, token: 'test', meter }),
+    openOrganization: (input, meter) => (parseGitHubOwner(input) ? openGitHubOwner(input, { fetch, token: 'test', meter }) : undefined),
     store,
   });
   const base = await listen(server, 0);
@@ -335,6 +335,12 @@ async function serve(t: { after(fn: () => unknown): void }, { github = recording
       base,
     },
   );
+}
+
+/** An answer without its requests and quota, which depend on how far 8 repositories at a time got: checked in tests/requests.test.ts. */
+function uncounted({ requests, quota, ...answer }: any) {
+  assert.ok(requests && quota !== undefined, 'the answer carries its requests and quota');
+  return answer;
 }
 
 test('the web view, an organization: the counts, each repository with skills as /api/scan answers it, sorted; the warnings with their repository', async (t) => {
@@ -381,22 +387,31 @@ test('the web view, a user: the repositories they own; an owner without skills: 
   )('github.com/artspb');
   assert.deepEqual(none, {
     status: 200,
-    body: { organization: { id: 'artspb', url: 'https://github.com/artspb', repositories: 0, skills: 0 }, repositories: [], warnings: [] },
+    body: {
+      organization: { id: 'artspb', url: 'https://github.com/artspb', repositories: 0, skills: 0 },
+      repositories: [],
+      warnings: [],
+      // The owner and the one page of the list.
+      requests: { rest: 2, graphql: 0, files: 0 },
+      quota: null,
+    },
   });
 });
 
 test('the web view, an organization that cannot be scanned: no such owner, the rate limit, a rejected token, GitHub unreachable → 400 with the CLI message', async (t) => {
   assert.deepEqual(await (await serve(t))('github.com/nobody'), {
     status: 400,
-    body: { error: 'Organization or user not found: https://github.com/nobody' },
+    body: { error: 'Organization or user not found: https://github.com/nobody', requests: { rest: 1, graphql: 0, files: 0 }, quota: null },
   });
   const limited = { status: 403, body: { message: 'API rate limit exceeded for user ID 1.' } };
-  assert.deepEqual(await (await serve(t, { github: recording({ [`${API}/repos/JetBrains/repo-50/git/trees/${commitOf('repo-50')}?recursive=1`]: limited }) }))('github.com/JetBrains'), {
+  const limitedAnswer = await (await serve(t, { github: recording({ [`${API}/repos/JetBrains/repo-50/git/trees/${commitOf('repo-50')}?recursive=1`]: limited }) }))('github.com/JetBrains');
+  assert.deepEqual({ ...limitedAnswer, body: uncounted(limitedAnswer.body) }, {
     status: 400,
     body: { error: 'GitHub rate limit reached; try again later', rateLimit: { resetsAt: null, token: true } },
   });
   const rejected = { status: 401, body: { message: 'Bad credentials' } };
-  assert.deepEqual(await (await serve(t, { github: recording({ [`${API}/repos/JetBrains/Alpha/git/trees/${commitOf('Alpha')}?recursive=1`]: rejected }) }))('github.com/JetBrains'), {
+  const rejectedAnswer = await (await serve(t, { github: recording({ [`${API}/repos/JetBrains/Alpha/git/trees/${commitOf('Alpha')}?recursive=1`]: rejected }) }))('github.com/JetBrains');
+  assert.deepEqual({ ...rejectedAnswer, body: uncounted(rejectedAnswer.body) }, {
     status: 400,
     body: { error: 'GitHub rejected the token in GITHUB_TOKEN' },
   });
@@ -489,17 +504,17 @@ test('the web view, an organization with &progress: NDJSON, the repositories sca
   assert.equal(type, 'application/x-ndjson; charset=utf-8');
   // 0 first, then one more as each repository ends, scanned or skipped (the empty one too).
   assert.deepEqual(
-    lines.slice(0, -1),
-    Array.from({ length: 102 }, (_, scanned) => ({ progress: { scanned, repositories: 101 } })),
+    lines.slice(0, -1).map(({ progress }) => progress),
+    Array.from({ length: 102 }, (_, scanned) => ({ scanned, repositories: 101 })),
   );
-  assert.deepEqual(lines.at(-1), (await get('github.com/JetBrains')).body);
+  assert.deepEqual(uncounted(lines.at(-1)), uncounted((await get('github.com/JetBrains')).body));
   // A user too; an owner with no repository: only 0 of 0.
   const user = await get.progress('github.com/artspb');
-  assert.deepEqual(user.lines.slice(0, -1), [{ progress: { scanned: 0, repositories: 1 } }, { progress: { scanned: 1, repositories: 1 } }]);
+  assert.deepEqual(user.lines.slice(0, -1).map(uncounted), [{ progress: { scanned: 0, repositories: 1 } }, { progress: { scanned: 1, repositories: 1 } }]);
   const none = await (
     await serve(t, { github: recording({ [`${API}/users/artspb/repos?type=owner&per_page=100&page=1`]: { status: 200, body: [] } }) })
   ).progress('github.com/artspb');
-  assert.deepEqual(none.lines, [
+  assert.deepEqual(none.lines.map(uncounted), [
     { progress: { scanned: 0, repositories: 0 } },
     { organization: { id: 'artspb', url: 'https://github.com/artspb', repositories: 0, skills: 0 }, repositories: [], warnings: [] },
   ]);
@@ -510,7 +525,7 @@ test('the web view, &progress: no such owner, a repository → JSON, as without 
   assert.deepEqual(await get.progress('github.com/nobody'), {
     status: 400,
     type: 'application/json; charset=utf-8',
-    lines: [{ error: 'Organization or user not found: https://github.com/nobody' }],
+    lines: [{ error: 'Organization or user not found: https://github.com/nobody', requests: { rest: 1, graphql: 0, files: 0 }, quota: null }],
   });
   const repository = await get.progress('github.com/JetBrains/zeta/tree/main');
   assert.equal(repository.status, 200);
@@ -520,9 +535,9 @@ test('the web view, &progress: no such owner, a repository → JSON, as without 
   const failed = await (await serve(t, { github: recording({ [`${API}/repos/JetBrains/repo-50/git/trees/${commitOf('repo-50')}?recursive=1`]: limited }) })).progress('github.com/JetBrains');
   assert.equal(failed.status, 200);
   assert.equal(failed.type, 'application/x-ndjson; charset=utf-8');
-  assert.deepEqual(failed.lines[0], { progress: { scanned: 0, repositories: 101 } });
+  assert.deepEqual(uncounted(failed.lines[0]), { progress: { scanned: 0, repositories: 101 } });
   assert.ok(failed.lines.slice(0, -1).every((line: any) => line.progress && line.progress.scanned < 101));
-  assert.deepEqual(failed.lines.at(-1), { error: 'GitHub rate limit reached; try again later', rateLimit: { resetsAt: null, token: true } });
+  assert.deepEqual(uncounted(failed.lines.at(-1)), { error: 'GitHub rate limit reached; try again later', rateLimit: { resetsAt: null, token: true } });
 });
 
 test('the page reads the progress, then the answer; a repository and a stored scan as JSON', async (t) => {
@@ -542,7 +557,7 @@ test('the page reads the progress, then the answer; a repository and a stored sc
   const failed = await readAnswer(
     await globalThis.fetch(`${(await serve(t, { github: recording({ [`${API}/repos/JetBrains/Alpha/git/trees/${commitOf('Alpha')}?recursive=1`]: { status: 401, body: {} } }) })).base}${progressUrl(request)}`),
   );
-  assert.deepEqual(failed, { error: 'GitHub rejected the token in GITHUB_TOKEN' });
+  assert.deepEqual(uncounted(failed), { error: 'GitHub rejected the token in GITHUB_TOKEN' });
 });
 
 test('the page while a scan runs and once stopped: what it scans, how many repositories of how many', () => {
@@ -795,7 +810,7 @@ test('GraphQL refused: the rate limit, RATE_LIMITED in its errors too, or a reje
   }
   // The rate limit's reset time, as for any request: the web view hears it.
   const get = await serve(t, { github: bigRecording({ [`${API}/graphql`]: refusals[1][0] }) });
-  assert.deepEqual((await get('github.com/Big')).body, {
+  assert.deepEqual(uncounted((await get('github.com/Big')).body), {
     error: 'GitHub rate limit reached; try again later',
     rateLimit: { resetsAt: new Date(reset * 1000).toISOString(), token: true },
   });

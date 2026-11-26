@@ -26,6 +26,7 @@ The core runs in the server; the page is a *thin client*: HTML, CSS and plain Ja
 - **Warnings**, after the skills
 - A **filter**: every word, case-insensitive, in the name or the description
 - The address holds the scan: `/?repo=<URL | directory | organization URL>` scans on open; each scan updates it; *back* scans again
+- **Requests**, under the status: how many GitHub requests the scan made, by kind, and the quota left; see [below](#requests-and-quota)
 - An error: its message, in place of the result
   - The [rate limit](analysis.md#rate-limit) with a reset time: in the *viewer's* local time and format,
     `GitHub rate limit reached; it resets at 14:32 (in 20 minutes)`; without `GITHUB_TOKEN`,
@@ -53,9 +54,34 @@ The core runs in the server; the page is a *thin client*: HTML, CSS and plain Ja
     an answer to an older word is not shown. The box emptied: the list, at once
   - The first **50** results, then `and <M> more`: one letter matches about the whole store
   - From the store only, without GitHub: offline too, no rate limit spent
+## Requests and quota
+A scan can spend thousands of GitHub requests; the page says what each one cost, and what is left, before the limit stops it.
+- **Counted by kind**, each request GitHub answers (one that gets no answer is not): `rest`, the REST API's, on the hour's
+  5,000 with `GITHUB_TOKEN`, 60 without; `graphql`, the GraphQL queries, on a quota of their own, in points;
+  `files`, the file reads from `raw.githubusercontent.com`, on neither
+- **The quota** from GitHub's answers, never an extra request: `x-ratelimit-remaining`, `x-ratelimit-limit`,
+  `x-ratelimit-reset` and `x-ratelimit-resource` of every API answer; one without all four, or not numbers, tells none
+  - Kept by resource, `core` (REST) and `graphql` (and any other GitHub names), across every scan of the server, in memory:
+    the latest window (`x-ratelimit-reset`); in the same window the lowest left, answers arriving out of order never raise it
+- **Shown** under the status, in the viewer's local time and number format, the reset time as the [rate limit's](analysis.md#rate-limit),
+  rounded up: `312 REST requests, 26 GraphQL queries, 1,904 file reads · 4,059 of 5,000 left, resets at 17:33`
+  - The three counts always, singular for one; none: `0 requests`; a stored scan opened as stored: `0 requests, from the store`
+  - REST's quota, then GraphQL's, when seen: `· GraphQL: 4,974 of 5,000 points left, resets at 17:40`; none seen: the counts alone
+  - A limit whose reset is past has reset since: `5,000 of 5,000 left`, no time
+  - An error too, the rate limit's included: what the scan spent before it
+- **While an organization scans**: updated with each progress line, so **Stop** can come before the quota runs out
+- **Before any scan**: the quota the server last saw, from an earlier scan, `GitHub quota: 4,059 of 5,000 left, resets at 17:33`;
+  none seen: nothing. GitHub is never asked just to show it
+- Without `GITHUB_TOKEN`: the same, against the 60 an hour; no GraphQL query
+- The token stays in the server; the counts and the quota are not secret
+- The CLI prints none of it
 ## API
 `GET /api/scan?repo=<URL | directory>` → `200` with JSON:
-`{ repository, skills: [{ id, name, description, path, commit, copies, link }], warnings, stored }`
+`{ repository, skills: [{ id, name, description, path, commit, copies, link }], warnings, stored, requests, quota }`
+- `requests`: `{ rest, graphql, files }`, the scan's [requests](#requests-and-quota); a local directory, all `0`
+- `quota`: the last quota seen, `{ <resource>: { remaining, limit, resetsAt } }`, `core` and `graphql` among them,
+  `resetsAt` an ISO 8601 time; `null` while GitHub's answers told none
+- Every answer of `/api/scan` has both, an error `400` too, a progress line too; a `500` does not
 - `stored`: the id of the [stored scan](analysis.md#persistence), as `/api/scans` lists it; `null` when not stored (a local directory, a code search not exact for the commit, a store that cannot be written)
 - An error the CLI reports with exit code 1 (no `repo`, unreachable, not found): `400`, `{ error: <message> }`
   - The rate limit: `{ error, rateLimit: { resetsAt, token } }`, `error` without the reset time; `resetsAt` an ISO 8601 time,
@@ -63,12 +89,14 @@ The core runs in the server; the page is a *thin client*: HTML, CSS and plain Ja
 - Anything else: `500`, `{ error }`; an unknown path: `404`
 
 An organization, `?repo=github.com/<owner>` → `200` with JSON:
-`{ organization: { id, url, repositories, skills }, repositories: [<each repository with skills, as above>], warnings }`
+`{ organization: { id, url, repositories, skills }, repositories: [<each repository with skills, as above>], warnings, requests, quota }`;
+each repository without `requests` and `quota`: the organization's are for all of them
 - `organization.repositories` and `organization.skills`: counts, as the CLI prints them
 - `warnings`: every repository's, `<owner>/<repo>: <warning>`, a repository that cannot be scanned too
 - The rate limit, a rejected token, GitHub unreachable, no such owner: `400`, as the CLI's exit code 1
 - `&progress`, `?repo=github.com/<owner>&progress`: the answer is **NDJSON**, `application/x-ndjson`, one object a line,
-  `200` from the first line: `{ progress: { scanned, repositories } }`, `scanned` 0 first, then one more as each repository ends;
+  `200` from the first line: `{ progress: { scanned, repositories }, requests, quota }`, `scanned` 0 first, then one more as each repository ends,
+  `requests` the scan's so far;
   the last line the answer above, or `{ error }` when the scan fails on the way (the rate limit, a rejected token), `rateLimit` too as above
   - No such owner, an error before the list: answered as without `&progress`; a repository, a directory: JSON, as without it
 - The page leaves before the answer (another scan, *back*, a reload, a closed tab): the request closes, and no repository
@@ -77,7 +105,10 @@ An organization, `?repo=github.com/<owner>` → `200` with JSON:
 `GET /api/scans` → `200`, `{ scans: [{ id, repository, refs, skills, warnings, scannedAt }] }`: the stored scans, the latest first;
 `skills` and `warnings` are counts, `scannedAt` an ISO 8601 time
 
-`GET /api/scans/<id>` → `200`, the stored result, as `/api/scan` answers it, `stored` being `<id>`; no such scan: `404`, `{ error }`
+`GET /api/scans/<id>` → `200`, the stored result, as `/api/scan` answers it, `stored` being `<id>`, `requests` all `0`
+and `quota` the last seen; no such scan: `404`, `{ error }`
+
+`GET /api/quota` → `200`, `{ quota }`: the last quota seen, as above, `null` before any; GitHub is not asked
 
 `GET /api/search?q=<words>` → `200`, `{ results: [{ id, name, sentence, link, repository, refs, scan }], more }`, from the store only:
 the skills of each repository's latest stored scan that match, by name, description or repository, sorted as the page shows them

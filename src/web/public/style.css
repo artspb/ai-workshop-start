@@ -22,6 +22,7 @@ form #stop { background: none; border-color: var(--border); color: inherit; }
 a { color: var(--accent); }
 #progress { width: 100%; }
 #status.error { color: var(--error); white-space: pre-wrap; }
+#requests { margin: 0.25rem 0 0; font-size: 0.875rem; color: var(--muted); }
 .summary { display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
 .summary h2 { margin: 1.5rem 0 0.5rem; }
 #commit { color: var(--muted); font-family: ui-monospace, monospace; }
