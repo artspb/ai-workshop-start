@@ -1,7 +1,7 @@
 // The skill-atlas commands. Everything that differs between the CLI and the tests comes in
 // through the context.
 import { AtlasError } from './core/errors.ts';
-import { skillLink, type Repository, type Skill } from './core/model.ts';
+import { firstSentence, skillLink, type Repository, type Skill } from './core/model.ts';
 import { scanOrganization, type Organization } from './core/organization.ts';
 import { scan, type Source, type Store } from './core/scan.ts';
 
@@ -95,9 +95,4 @@ function printRepository(repository: Repository, skills: Skill[], { print }: Con
     print(`  ${skillLink(repository, skill)}`);
     if (skill.copies.length > 0) print(`  also in ${skill.copies.join(', ')}`);
   }
-}
-
-function firstSentence(text: string): string {
-  const line = text.replace(/\s+/g, ' ').trim();
-  return /^.*?[.!?](?=\s|$)/.exec(line)?.[0] ?? line;
 }
