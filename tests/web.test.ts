@@ -111,6 +111,13 @@ test('/api/scan, a local directory: the same skills as scan, the whole descripti
   assert.equal(body.repository.commit, '');
 });
 
+test('/api/scan, a local directory with &progress: JSON, as without it', async () => {
+  const response = await fetch(`${base}/api/scan?repo=${encodeURIComponent(FIXTURE)}&progress`);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-type'), 'application/json; charset=utf-8');
+  assert.deepEqual(await response.json(), (await scan(FIXTURE)).body);
+});
+
 test('/api/scan, an error the CLI reports with exit code 1: 400 with its message', async () => {
   assert.deepEqual(await scan(), { status: 400, type: 'application/json; charset=utf-8', body: { error: 'Enter a GitHub URL or a directory' } });
   assert.deepEqual((await scan('  ')).body, { error: 'Enter a GitHub URL or a directory' });
