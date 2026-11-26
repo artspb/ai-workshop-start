@@ -65,7 +65,8 @@ For each finding, reproduce what it claims, as it says to:
 - **It holds** → fix it. A finding without a test gets one: integration tests for every case in the spec.
   A comment's ```` ```suggestion ```` is a proposal; apply it only if it is right.
 - **It does not hold** → **Not changed**, with what you ran and what it printed.
-- **A question** → answer it; change code only if the answer shows a defect.
+- **A question** → answer it; change code only if the answer shows a defect. Answered with a commit, the reply
+  still starts with `Fixed in <sha>:`, the answer after it: merge-when-reviewed counts a thread as fixed only so.
 - **A choice the spec leaves open, or two reviewers disagree** → don't pick; say so for a person.
 - **Outdated** (`isOutdated`): check it against the current code; already fixed → say by which commit.
 
@@ -103,6 +104,7 @@ gh api graphql -f r="$R" -f b=$'<the round in a line; answers to review bodies>\
   {pullRequestReviewId: $r, event: COMMENT, body: $b}) { pullRequestReview { url } } }'
 ```
 - **Fixed in `<sha>`**: what changed, and how you checked it (the comment's reproduction, now passing).
+  Every reply that comes with a commit starts so, whatever the finding's label, a **question** too.
 - **Not changed**: why, with the evidence.
 - Don't resolve threads: the reviewer or a person does.
 

@@ -45,7 +45,8 @@ Merge only when **every** check holds; at the first that fails, post nothing and
      no `**blocking**`, `**suggestion**` or `**question**`, no gap or risk it asks to change.
 3. **Every thread**, resolved or not: its last comment is the bot's address-review reply that starts with `Fixed in`
    (with the marker line), and nobody commented after it. A thread ending in **Not changed**, an answer to a question,
-   or a reviewer's follow-up is not completed.
+   or a reviewer's follow-up is not completed. address-review starts every reply that comes with a commit with
+   `Fixed in <sha>`, a question's answer too, so a reply that does not is left for a person on purpose.
 4. **No person** commented: every comment and review on the pull request is the bot's (login and `Bot`).
 5. **Nothing in flight**: no review in state `PENDING`.
 6. **Green and clean**: the head's `statusCheckRollup.state` is `SUCCESS` and `mergeStateStatus` is `CLEAN`.
