@@ -54,11 +54,13 @@ npm run typecheck && npm test && npm run e2e && ./skill-atlas scan ./fixture
 - **The CLI's output changed**: no video; put the command and its output, before and after, in the body as text.
 - **Nothing a person sees** (spec, tests, refactoring, skills): no demo; say "No demo: <why>" in the body.
 
-Record with Playwright and ffmpeg in a temporary folder, never as dependencies of the repository:
+Record with Playwright and ffmpeg in a temporary folder, never as dependencies of the repository.
+Each block may run in a new shell: it sets `D` again, and the server's PID is kept in a file, not as a job.
 ```sh
-D=$(mktemp -d) && (cd "$D" && npm init -y >/dev/null && npm i -s playwright@1.49.1 ffmpeg-static@5.2.0 \
-  && npx playwright install --with-deps chromium)
-SKILL_ATLAS_CACHE="$D/cache" ./skill-atlas serve --port 0 > "$D/serve.log" &   # prints its URL; no GITHUB_TOKEN
+D=/tmp/demo-issue-<n> && mkdir -p "$D" && (cd "$D" && npm init -y >/dev/null \
+  && npm i -s playwright@1.65.1 ffmpeg-static@5.2.0 && npx playwright install --with-deps chromium)
+env -u GITHUB_TOKEN SKILL_ATLAS_CACHE="$D/cache" ./skill-atlas serve --port 0 > "$D/serve.log" 2>&1 &
+echo $! > "$D/serve.pid"; sleep 2; cat "$D/serve.log"    # its URL; no GITHUB_TOKEN
 ```
 `$D/record.mjs`, adapted to the change: show the new behaviour in 10–30 s, on `./fixture` (`/?repo=<its absolute path>`)
 or a recorded answer; live GitHub only when the change is about GitHub. Wait for what the page shows, not for time:
@@ -74,7 +76,9 @@ await page.waitForTimeout(1500);               // let the last frame be seen
 await context.close(); await browser.close();  // the video is written on close
 ```
 ```sh
-(cd "$D" && node record.mjs "<url>" video) && F=$(node -p "require('$D/node_modules/ffmpeg-static')")
+D=/tmp/demo-issue-<n>
+(cd "$D" && node record.mjs "<url>" video); kill "$(cat "$D/serve.pid")"    # the server is done
+F=$(node -p "require('$D/node_modules/ffmpeg-static')")
 "$F" -i "$D"/video/*.webm -c:v libx264 -pix_fmt yuv420p -movflags +faststart "$D/demo.mp4"
 "$F" -i "$D/demo.mp4" -vf "fps=10,scale=960:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse" "$D/demo.gif"
 ```
@@ -84,19 +88,22 @@ Keep it under 10 MB: shorter, fewer frames or narrower if not.
 **Attach** it on the `demos` branch, never on the pull request's branch: a video merged into `main` stays in its history.
 GitHub has no API for the upload a person drags into a comment; a GIF linked from the repository shows inline.
 ```sh
-git fetch origin demos && git worktree add "$D/demos" origin/demos \
+D=/tmp/demo-issue-<n>     # FETCH_HEAD: a single-branch clone has no origin/demos
+git fetch origin demos && git worktree add --detach "$D/demos" FETCH_HEAD \
   || { git worktree add --detach "$D/demos" && git -C "$D/demos" checkout --orphan demos && git -C "$D/demos" rm -rfq .; }
-mkdir -p "$D/demos/pr-<n>" && cp "$D/demo.gif" "$D/demo.mp4" "$D/demos/pr-<n>/"
-git -C "$D/demos" add -A && git -C "$D/demos" commit -m "Demo of #<n>" && git -C "$D/demos" push origin HEAD:demos
-git worktree remove --force "$D/demos"; kill %1
+mkdir -p "$D/demos/pr-<pr>" && cp "$D/demo.gif" "$D/demo.mp4" "$D/demos/pr-<pr>/"
+git -C "$D/demos" add -A && git -C "$D/demos" commit -m "Demo of #<pr>" \
+  && { git -C "$D/demos" push origin HEAD:demos \
+       || { git -C "$D/demos" pull --rebase origin demos && git -C "$D/demos" push origin HEAD:demos; }; }
+git worktree remove --force "$D/demos"     # the push retries once, on top, if another run pushed first
 ```
-The pull request's number exists only once it is opened: open it (section 6), then attach the demo and add to the body
-(`gh pr edit <n> --body-file body.md`):
+The pull request's number (`<pr>`; `<n>` is the issue's) exists only once it is opened: open it (section 6),
+then attach the demo and add to the body (`gh pr edit <pr> --body-file body.md`):
 ```md
 ## Demo
-![<what it shows>](https://github.com/{owner}/{repo}/raw/demos/pr-<n>/demo.gif)
+![<what it shows>](https://github.com/{owner}/{repo}/raw/demos/pr-<pr>/demo.gif)
 
-[The video, full size](https://github.com/{owner}/{repo}/raw/demos/pr-<n>/demo.mp4)
+[The video, full size](https://github.com/{owner}/{repo}/raw/demos/pr-<pr>/demo.mp4)
 ```
 
 ## 6. Pull request

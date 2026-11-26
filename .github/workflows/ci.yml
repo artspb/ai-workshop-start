@@ -3,7 +3,6 @@
 name: CI
 on:
   push:
-    branches-ignore: [demos] # demo videos of pull requests, no code
   pull_request:
 permissions:
   contents: read
