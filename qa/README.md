@@ -55,4 +55,4 @@ Then follow the steps in a browser. Done: stop the server, remove the store.
 - `## Steps`: numbered, each with its `- See:`. A *while it scans* may pass quickly: what the status said on the way counts
 - A browser that may write the clipboard, for **Copy**
 - Recordings on the `demos` branch, never on `main`: `qa/<short sha of main>/<script>.gif` and `.mp4`
-- A failing script's issue: titled `QA: <script> fails`, label `bug`; one open issue per script, a new failure a comment on it
+- A failing script's issue: titled `QA: <script> fails`, labels `Delegate to AI` and `bug`; one open issue per script, a new failure a comment on it

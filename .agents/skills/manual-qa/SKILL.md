@@ -104,14 +104,16 @@ git worktree remove --force "$D/demos"     # the push retries once, on top, if a
 A script's GIF: `https://github.com/{owner}/{repo}/raw/demos/qa/<short>/<script>.gif`; its video: the same, `.mp4`.
 
 ## 4. A failing script: an issue
-One open issue per script, titled `QA: <script> fails`. An open one already: comment on it, don't open another.
+File it as [Filing an issue](#filing-an-issue) says. One open issue per script, titled `QA: <script> fails`.
+An open one already: comment on it, don't open another.
 ```sh
 gh issue list --state open --search "\"QA: <script> fails\" in:title" --json number,title \
   --jq '.[] | select(.title == "QA: <script> fails") | .number'
-gh issue create --title "QA: <script> fails" --label bug --body-file issue.md    # none open
-gh issue comment <n> --body-file issue.md                                       # one open
+gh issue comment <m> --body-file issue.md                                       # one open
+M=$(gh issue create --title "QA: <script> fails" --body-file issue.md | grep -o '[0-9]*$')    # none open
+gh issue edit "$M" --add-label "Delegate to AI" --add-label bug
 ```
-Label `bug`, never **Delegate to AI**: a person decides what is done with it. The body:
+Labels **Delegate to AI** and `bug`, added after the issue exists. The body:
 ```md
 [qa/<script>.md](https://github.com/{owner}/{repo}/blob/<sha>/qa/<script>.md) fails at step <k>, on <sha>.
 
@@ -135,3 +137,21 @@ QA of <sha>:
 | [local-directory](…/qa/local-directory.md) | pass | [GIF](…/local-directory.gif) · [MP4](…/local-directory.mp4) |
 | [errors](…/qa/errors.md) | **fail** at step 6: [#<issue>](…) | [GIF](…) · [MP4](…) |
 ```
+
+## Filing an issue
+Every skill that files an issue follows this section, word for word: the issue gets the **Delegate to AI** label
+at once, so the Delegate to AI automation (issue-to-pr) picks it up, with no person to notice it first.
+1. **No duplicate**: search the open issues first. One already covers it → comment there (`gh issue comment <m>`)
+   and file nothing: a duplicate would be implemented twice.
+   ```sh
+   gh issue list --search "<words> in:title" --state open
+   ```
+2. **File it, then label it in a second call**, not with `--label` on `gh issue create`: the automation runs on
+   `issues.labeled`, and a label added on its own fires that event for sure. A skill's own labels (a QA failure's `bug`)
+   may go in the same edit.
+   ```sh
+   M=$(gh issue create --title "<what is wrong>" --body-file issue.md | grep -o '[0-9]*$')
+   gh issue edit "$M" --add-label "Delegate to AI"
+   ```
+3. **Say which**: name the issue, `#<m>`, filed or commented on, in the skill's answer (the pull request's body,
+   the reply on the thread, the QA report).
