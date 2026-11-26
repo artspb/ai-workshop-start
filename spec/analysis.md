@@ -3,6 +3,7 @@
 A **GitHub repository** URL, or a local directory
 - `github.com/<owner>/<repo>`: the default branch
 - `github.com/<owner>/<repo>/tree/<ref>`: a commit, a branch or a tag; one path segment
+- `github.com/<owner>`: an organization or a user, every repository of it; see [organization](#organization)
 ## Output
 Every *project skill*: **name**, **description**, **link**
 ## What a project skill is
@@ -20,6 +21,18 @@ a regular file named exactly `SKILL.md` at **`<root>/<name>/SKILL.md`**.
 - **Copies**: the same `<name>` and the *same bytes* in more than one place are **one skill**.
   Its path is the first by path; the others are its copies, and share its warnings.
   The same `<name>` with different bytes: *two skills*.
+## Organization
+`github.com/<owner>`: every repository GitHub lists for the owner, each one scanned as `scan` does
+- An organization: every repository the scan can see; with `GITHUB_TOKEN`, its private ones too.
+  A user: the repositories they own, the public ones
+- Forks and archived repositories too: they are the owner's repositories
+- Each repository: its default branch, as `/tree/<default branch>`, so listed through its tree:
+  code search allows 10 requests a minute, too few for an organization
+- Each repository is a scan of its own: [stored](#persistence) as one, not scanned again at the same commit;
+  the list of repositories is asked for every time
+- A repository that cannot be scanned (an empty one, a branch gone since the list) → a *warning*, the others go on
+- No such owner → a clear message, exit code 1; the rate limit, a rejected token, GitHub unreachable: the scan stops, exit code 1
+- 8 repositories at a time
 ## Persistence
 A GitHub scan listed through its **tree** is **stored**; the same repository at the same commit is not scanned again.
 - The key: the repository, the **resolved commit**, and whether it was the default branch (its warning is worded for that); a branch that moved is a new commit, a new scan
