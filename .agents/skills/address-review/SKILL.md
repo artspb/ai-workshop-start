@@ -19,10 +19,11 @@ Everything you post ends its text with the marker **on a line of its own**: `<!-
 review, `<!-- address-review answers:<databaseId>,… -->` naming the review bodies it answers. All Air automations post as
 the same bot, a signature may follow your text, and a reviewer may quote the marker in prose, a code span or a code block;
 so a comment is yours when, outside its fenced code blocks (a ```` ``` ```` or `~~~` fence at the start of a line, closed by
-the same fence), it has a line that is *only* the marker, whatever its author or its last line:
+the same fence, or never closed: GitHub renders it to the end), it has a line that is *only* the marker, whatever its
+author or its last line:
 ```sh
 MARK='(?m)^<!-- address-review( answers:[0-9,]+)? -->\s*$'
-# jq: def mine: gsub("(?m)^ {0,3}(`{3,}|~{3,})[^\\n]*\\n[\\s\\S]*?^ {0,3}\\1[`~]*[ \\t]*$"; "") | test($m);
+# jq: def mine: gsub("(?m)^ {0,3}(`{3,}|~{3,})[^\\n]*\\n[\\s\\S]*?(^ {0,3}\\1[`~]*[ \\t]*$|\\z)"; "") | test($m);
 ```
 
 ## 0. Is there anything to do?
@@ -52,9 +53,10 @@ The count reads the pull request, not the checkout: an Air checkout is shallow, 
   whose `databaseId` no `answers:` marker names. A body with no finding ("nothing blocks") needs no answer.
 
 ```sh
-jq --arg m "$MARK" 'def mine: gsub("(?m)^ {0,3}(`{3,}|~{3,})[^\\n]*\\n[\\s\\S]*?^ {0,3}\\1[`~]*[ \\t]*$"; "") | test($m);
+jq --arg m "$MARK" 'def mine: gsub("(?m)^ {0,3}(`{3,}|~{3,})[^\\n]*\\n[\\s\\S]*?(^ {0,3}\\1[`~]*[ \\t]*$|\\z)"; "") | test($m);
   .data.repository.pullRequest.reviewThreads.nodes[] | select((.isResolved | not) and (.comments.nodes[-1].body | mine | not))' pr.json
 ```
+Use `jq` itself, installed if missing (`sudo apt-get install -y jq`): `gh --jq` has no backreferences and rejects the pattern.
 
 ## 1. Check everything unanswered
 Check out the branch (`gh pr checkout <n>`), read [spec/](../../../spec/) and [AGENTS.md](../../../AGENTS.md).

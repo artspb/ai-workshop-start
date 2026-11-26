@@ -86,7 +86,8 @@ gh api repos/{owner}/{repo}/pulls/<n>/reviews --method POST --input review.json
   - `User can only have one pending review per pull request`: an address-review round of the same bot is in flight.
     Wait a minute and post again, up to three times. Then nothing starts address-review again (it runs on a submitted
     review), so say so in a pull request comment, which is not a review: `gh pr comment <n> --body 'No review of <headRefOid>:
-    a pending review of this bot blocks it; submit or delete it, then ask for a review again.'`
+    a pending review of this bot blocks it; submit any review to start address-review, which submits it, then ask
+    for a review again.'` A pending review is shown only to its author, so a person can't submit or delete it.
 - `line` is the line in the new file; a range adds `start_line`.
 
 ## Example
