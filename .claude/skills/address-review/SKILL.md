@@ -17,16 +17,18 @@ something outside the pull request's scope is answered **Not changed**, with the
 ## The marker
 Everything you post ends its text with the marker **on a line of its own**: `<!-- address-review -->`, or, in the round's
 review, `<!-- address-review answers:<databaseId>,… -->` naming the review bodies it answers. All Air automations post as
-the same bot, a signature may follow your text, and a reviewer may quote the marker in prose or a code span; so a comment
-is yours when it has a line that is *only* the marker, whatever its author or its last line:
+the same bot, a signature may follow your text, and a reviewer may quote the marker in prose, a code span or a code block;
+so a comment is yours when, outside its code blocks, it has a line that is *only* the marker, whatever its author or its last line:
 ```sh
-MARK='(?m)^<!-- address-review( answers:[0-9,]+)? -->\s*$'    # jq: .body | test($m)
+MARK='(?m)^<!-- address-review( answers:[0-9,]+)? -->\s*$'
+# jq: def mine: gsub("```[\\s\\S]*?```"; "") | test($m);
 ```
 
 ## 0. Is there anything to do?
 This skill runs on every submitted review, and your own round is a review too. Stop, posting nothing, when:
 - the pull request is closed, merged, a draft, or from a fork (`isCrossRepository`);
-- nothing is **unanswered** (below);
+- nothing is **unanswered** (below) and no review of yours is `PENDING`: a stranded one, whose replies already read as
+  answers, is still submitted (section 3), even with nothing else to answer;
 - the pull request already has **3** commits starting with `Address review`: then, once, post
   `Stopped after 3 rounds of review fixes; the open threads are for a person.` as a pull request comment
   (`gh pr comment <n>`, with the marker), unless one of the pull request's `comments` has it already.
@@ -48,8 +50,8 @@ The count reads the pull request, not the checkout: an Air checkout is shallow, 
   whose `databaseId` no `answers:` marker names. A body with no finding ("nothing blocks") needs no answer.
 
 ```sh
-jq --arg m "$MARK" '.data.repository.pullRequest.reviewThreads.nodes[]
-  | select((.isResolved | not) and (.comments.nodes[-1].body | test($m) | not))' pr.json
+jq --arg m "$MARK" 'def mine: gsub("```[\\s\\S]*?```"; "") | test($m);
+  .data.repository.pullRequest.reviewThreads.nodes[] | select((.isResolved | not) and (.comments.nodes[-1].body | mine | not))' pr.json
 ```
 
 ## 1. Check everything unanswered
