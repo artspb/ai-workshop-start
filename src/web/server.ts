@@ -18,6 +18,7 @@ const FILES: Record<string, { file: string; type: string }> = {
   '/': { file: 'index.html', type: 'text/html; charset=utf-8' },
   '/app.js': { file: 'app.js', type: 'text/javascript; charset=utf-8' },
   '/filter.js': { file: 'filter.js', type: 'text/javascript; charset=utf-8' },
+  '/history.js': { file: 'history.js', type: 'text/javascript; charset=utf-8' },
   '/style.css': { file: 'style.css', type: 'text/css; charset=utf-8' },
 };
 
@@ -60,7 +61,7 @@ async function handle(request: IncomingMessage, response: ServerResponse, option
   const stored = /^\/api\/scans\/([^/]+)$/.exec(url.pathname);
   if (stored) {
     const result = await options.store?.open(stored[1]);
-    return result ? json(response, 200, answer(result)) : json(response, 404, { error: `No stored scan: ${stored[1]}` });
+    return result ? json(response, 200, answer(result, stored[1])) : json(response, 404, { error: `No stored scan: ${stored[1]}` });
   }
   const page = FILES[url.pathname];
   if (!page) return json(response, 404, { error: `Not found: ${url.pathname}` });
@@ -71,15 +72,17 @@ async function handle(request: IncomingMessage, response: ServerResponse, option
 async function scanAnswer(input: string | null, { open, store }: WebOptions): Promise<[number, unknown]> {
   try {
     if (!input?.trim()) throw new AtlasError('Enter a GitHub URL or a directory');
-    return [200, answer(await scan(await open(input.trim()), store))];
+    const source = await open(input.trim());
+    const result = await scan(source, store);
+    return [200, answer(result, store && source.key ? store.id(source.key) : null)];
   } catch (error) {
     if (error instanceof AtlasError) return [400, { error: error.message }];
     throw error;
   }
 }
 
-/** A result as the page reads it: every skill with its link. */
-function answer({ repository, skills, warnings }: ScanResult) {
+/** A result as the page reads it: every skill with its link, and the stored scan's id, if stored. */
+function answer({ repository, skills, warnings }: ScanResult, stored: string | null) {
   return {
     repository,
     skills: skills.map((skill) => {
@@ -87,6 +90,7 @@ function answer({ repository, skills, warnings }: ScanResult) {
       return { id, name, description, path, commit, copies, link: skillLink(repository, skill) };
     }),
     warnings,
+    stored,
   };
 }
 

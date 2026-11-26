@@ -9,6 +9,7 @@ import { after, test } from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { createWebServer, listen } from '../src/web/server.ts';
 import { filterSkills } from '../src/web/public/filter.js';
+import { addressRequest, historyView, storedBox } from '../src/web/public/history.js';
 import { atlas, CLI, EXAMPLE_COMMIT, FIXTURE, open } from './helpers.ts';
 
 const server = createWebServer({ open });
@@ -34,6 +35,7 @@ test('the page: a box, Scan, a filter, the warnings and the scans before, as HTM
   for (const [path, type] of [
     ['/app.js', 'text/javascript; charset=utf-8'],
     ['/filter.js', 'text/javascript; charset=utf-8'],
+    ['/history.js', 'text/javascript; charset=utf-8'],
     ['/style.css', 'text/css; charset=utf-8'],
   ]) {
     const response = await fetch(`${base}${path}`);
@@ -72,6 +74,7 @@ test('/api/scan, a GitHub repository: the repository, each skill with its pinned
       },
     ],
     warnings: [],
+    stored: null,
   });
 });
 
@@ -157,6 +160,58 @@ test('the filter: every word, case-insensitive, in the name or the description',
   assert.deepEqual(names('commit messages'), ['commits']);
   assert.deepEqual(names('commit gradle'), []);
   assert.deepEqual(names('release'), ['release-checklist']);
+});
+
+test('the address: /?repo= scans, /?scan=<id> opens a stored scan, repo first; nothing, neither', () => {
+  assert.deepEqual(addressRequest('?repo=%20github.com%2FJetBrains%2Fexample%20'), {
+    repo: 'github.com/JetBrains/example',
+    url: '/api/scan?repo=github.com%2FJetBrains%2Fexample',
+  });
+  assert.deepEqual(addressRequest(`?scan=${'a'.repeat(64)}`), { scan: 'a'.repeat(64), url: `/api/scans/${'a'.repeat(64)}` });
+  assert.deepEqual(addressRequest('?repo=./fixture&scan=abc'), { repo: './fixture', url: '/api/scan?repo=.%2Ffixture' });
+  assert.equal(addressRequest('?scan=..%2Fpackage')?.url, '/api/scans/..%2Fpackage');
+  for (const search of ['', '?', '?repo=', '?repo=%20&scan=']) assert.equal(addressRequest(search), undefined, search);
+});
+
+test('a stored scan on the page: the box holds <repository URL>/tree/<commit>', () => {
+  assert.equal(
+    storedBox({ url: 'https://github.com/JetBrains/example', commit: EXAMPLE_COMMIT }),
+    `https://github.com/JetBrains/example/tree/${EXAMPLE_COMMIT}`,
+  );
+});
+
+test('Scanned before: hidden while nothing is stored; a row per scan, in order; only the one on the page marked', () => {
+  assert.deepEqual(historyView([], 'a'), { hidden: true, rows: [] });
+  const repository = { id: 'JetBrains/example', commit: EXAMPLE_COMMIT };
+  // The same commit twice: the default branch and /tree/<commit>, told apart by what was asked for.
+  const scans = [
+    { id: 'b', repository, ref: 'main (default branch)', skills: 1, warnings: 0, scannedAt: '2026-11-26T10:01:00.000Z' },
+    { id: 'a', repository, ref: EXAMPLE_COMMIT, skills: 2, warnings: 1, scannedAt: '2026-11-26T10:00:00.000Z' },
+  ];
+  const view = historyView(scans, 'a', (iso: string) => iso.slice(11, 16));
+  assert.equal(view.hidden, false);
+  assert.deepEqual(view.rows, [
+    {
+      id: 'b',
+      href: '/?scan=b',
+      name: 'JetBrains/example',
+      commit: EXAMPLE_COMMIT,
+      short: EXAMPLE_COMMIT.slice(0, 12),
+      details: 'main (default branch) · 1 skill · 10:01',
+      current: false,
+    },
+    {
+      id: 'a',
+      href: '/?scan=a',
+      name: 'JetBrains/example',
+      commit: EXAMPLE_COMMIT,
+      short: EXAMPLE_COMMIT.slice(0, 12),
+      details: `${EXAMPLE_COMMIT} · 2 skills · 1 warning · 10:00`,
+      current: true,
+    },
+  ]);
+  // Not stored, or nothing on the page: none marked.
+  for (const shown of [null, undefined, '']) assert.ok(historyView(scans, shown).rows.every((row) => !row.current), String(shown));
 });
 
 test('skill-atlas serve --port: the real CLI prints its URL and serves the page', async () => {

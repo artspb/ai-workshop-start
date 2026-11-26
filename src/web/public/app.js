@@ -1,6 +1,7 @@
 // The page: a thin client of /api/scan and /api/scans. The address holds the scan:
 // /?repo=<URL | directory> scans, /?scan=<id> opens a stored scan.
 import { filterSkills } from './filter.js';
+import { addressRequest, historyView, storedBox } from './history.js';
 
 const $ = (id) => document.getElementById(id);
 const form = $('scan');
@@ -14,6 +15,8 @@ const earlier = $('history');
 let skills = [];
 /** Only the latest scan is shown, whatever order the answers come in. */
 let latest = 0;
+/** The stored scan on the page, if any: the one marked in Scanned before. */
+let shown = null;
 
 form.addEventListener('submit', (event) => {
   event.preventDefault();
@@ -36,22 +39,20 @@ scanAddress();
 
 /** Scans what the address names, or opens the stored scan it names, if anything. */
 async function scanAddress() {
-  const parameters = new URLSearchParams(location.search);
-  const repo = parameters.get('repo')?.trim() ?? '';
-  const stored = repo ? '' : (parameters.get('scan')?.trim() ?? '');
-  input.value = repo;
+  const request = addressRequest(location.search);
+  input.value = request?.repo ?? '';
   // Every address cancels the scan before it, an empty one too.
   const scan = ++latest;
-  if (!repo && !stored) {
+  shown = null;
+  if (!request) {
     status.hidden = result.hidden = true;
     return showHistory();
   }
-  showStatus(repo ? `Scanning ${repo}…` : 'Opening the stored scan…');
+  showStatus(request.repo ? `Scanning ${request.repo}…` : 'Opening the stored scan…');
   result.hidden = true;
   let answer;
   try {
-    const response = await fetch(repo ? `/api/scan?repo=${encodeURIComponent(repo)}` : `/api/scans/${encodeURIComponent(stored)}`);
-    answer = await response.json();
+    answer = await (await fetch(request.url)).json();
   } catch (error) {
     answer = { error: `The Skill Atlas server does not answer: ${error.message}` };
   }
@@ -60,8 +61,8 @@ async function scanAddress() {
     showStatus(answer.error, true);
   } else {
     status.hidden = true;
-    // A stored scan: its repository at its commit, in the box, to scan again.
-    if (stored) input.value = answer.repository.commit ? `${answer.repository.url}/tree/${answer.repository.commit}` : answer.repository.url;
+    if (request.scan) input.value = storedBox(answer.repository);
+    shown = answer.stored;
     showResult(answer);
   }
   // A new scan may be stored now.
@@ -78,26 +79,15 @@ async function showHistory() {
     return;
   }
   if (asked !== latest) return;
-  const shown = result.hidden ? undefined : { id: $('repository').textContent, commit: $('commit').title };
+  const view = historyView(scans, shown);
   earlier.querySelector('ul').replaceChildren(
-    ...scans.map((stored) => {
-      const { repository } = stored;
-      const current = shown?.id === repository.id && shown.commit === repository.commit;
-      const item = element(
-        'li',
-        { className: current ? 'current' : '' },
-        element('a', { href: `/?scan=${stored.id}` }, repository.id),
-        ' at ',
-        element('code', { title: repository.commit }, repository.commit.slice(0, 12)),
-        ` · ${stored.skills} ${stored.skills === 1 ? 'skill' : 'skills'}`,
-        stored.warnings ? ` · ${stored.warnings} ${stored.warnings === 1 ? 'warning' : 'warnings'}` : '',
-        ` · ${stored.listing} · ${new Date(stored.scannedAt).toLocaleString()}`,
-      );
-      item.querySelector('a').dataset.scan = stored.id;
-      return item;
+    ...view.rows.map((row) => {
+      const link = element('a', { href: row.href }, row.name);
+      link.dataset.scan = row.id;
+      return element('li', { className: row.current ? 'current' : '' }, link, ' at ', element('code', { title: row.commit }, row.short), ` · ${row.details}`);
     }),
   );
-  earlier.hidden = scans.length === 0;
+  earlier.hidden = view.hidden;
 }
 
 function showStatus(text, error = false) {
