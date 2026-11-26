@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { AtlasError } from '../core/errors.ts';
 import { skillLink } from '../core/model.ts';
-import { scan, type Source, type Store } from '../core/scan.ts';
+import { scan, type ScanResult, type Source, type Store } from '../core/scan.ts';
 
 export type WebOptions = {
   /** Opens what the page asked to scan, as the CLI does. */
@@ -56,6 +56,12 @@ async function handle(request: IncomingMessage, response: ServerResponse, option
   const url = new URL(request.url ?? '/', 'http://localhost');
   if (request.method !== 'GET' && request.method !== 'HEAD') return json(response, 405, { error: 'GET only' });
   if (url.pathname === '/api/scan') return json(response, ...(await scanAnswer(url.searchParams.get('repo'), options)));
+  if (url.pathname === '/api/scans') return json(response, 200, { scans: (await options.store?.list()) ?? [] });
+  const stored = /^\/api\/scans\/([^/]+)$/.exec(url.pathname);
+  if (stored) {
+    const result = await options.store?.open(stored[1]);
+    return result ? json(response, 200, answer(result)) : json(response, 404, { error: `No stored scan: ${stored[1]}` });
+  }
   const page = FILES[url.pathname];
   if (!page) return json(response, 404, { error: `Not found: ${url.pathname}` });
   const body = await readFile(new URL(`public/${page.file}`, import.meta.url));
@@ -65,22 +71,23 @@ async function handle(request: IncomingMessage, response: ServerResponse, option
 async function scanAnswer(input: string | null, { open, store }: WebOptions): Promise<[number, unknown]> {
   try {
     if (!input?.trim()) throw new AtlasError('Enter a GitHub URL or a directory');
-    const { repository, skills, warnings } = await scan(await open(input.trim()), store);
-    return [
-      200,
-      {
-        repository,
-        skills: skills.map((skill) => {
-          const { id, name, description, path, commit, copies } = skill;
-          return { id, name, description, path, commit, copies, link: skillLink(repository, skill) };
-        }),
-        warnings,
-      },
-    ];
+    return [200, answer(await scan(await open(input.trim()), store))];
   } catch (error) {
     if (error instanceof AtlasError) return [400, { error: error.message }];
     throw error;
   }
+}
+
+/** A result as the page reads it: every skill with its link. */
+function answer({ repository, skills, warnings }: ScanResult) {
+  return {
+    repository,
+    skills: skills.map((skill) => {
+      const { id, name, description, path, commit, copies } = skill;
+      return { id, name, description, path, commit, copies, link: skillLink(repository, skill) };
+    }),
+    warnings,
+  };
 }
 
 function json(response: ServerResponse, status: number, body: unknown) {

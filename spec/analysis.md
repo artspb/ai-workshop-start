@@ -26,6 +26,7 @@ A GitHub scan is **stored**; the same repository at the same commit is not scann
 - Resolving the ref still asks GitHub; listing and reading the files does not
 - Stored: the whole result, warnings included; a failed scan is not stored
 - A local directory is never stored: its files change without a commit
+- Each stored scan records **when** it was scanned; nothing removes it
 - On disk, one file per scan: `SKILL_ATLAS_CACHE`, else `$XDG_CACHE_HOME/skill-atlas`, else `~/.cache/skill-atlas`; shared by `scan` and `serve`
 - The store never fails a scan: an unreadable or corrupt file → scanned again; an unwritable directory → not stored
 ## Architecture

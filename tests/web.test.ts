@@ -24,12 +24,12 @@ test('serve listens on localhost and prints its URL', () => {
   assert.match(base, /^http:\/\/localhost:\d+$/);
 });
 
-test('the page: a box, Scan, a filter and the warnings, as HTML, CSS and plain JavaScript', async () => {
+test('the page: a box, Scan, a filter, the warnings and the scans before, as HTML, CSS and plain JavaScript', async () => {
   const page = await fetch(`${base}/`);
   assert.equal(page.status, 200);
   assert.equal(page.headers.get('content-type'), 'text/html; charset=utf-8');
   const html = await page.text();
-  for (const part of ['<form id="scan">', 'id="repo"', '>Scan</button>', 'id="filter"', 'id="warnings"', 'src="/app.js"'])
+  for (const part of ['<form id="scan">', 'id="repo"', '>Scan</button>', 'id="filter"', 'id="warnings"', 'id="history"', 'Scanned before', 'src="/app.js"'])
     assert.ok(html.includes(part), part);
   for (const [path, type] of [
     ['/app.js', 'text/javascript; charset=utf-8'],

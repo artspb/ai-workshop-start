@@ -54,6 +54,7 @@ export async function openGitHub(input: string, options: GitHubOptions): Promise
     read: (path) => github.raw(`${RAW}/${id}/${sha}/${encodePath(path)}`),
     // The commit cannot change; the listing can find more or less, and words its warning per input.
     key: JSON.stringify(['github', id, sha, search ? 'search' : name.ref ? 'tree' : 'tree of the default branch']),
+    listing: search ? 'code search' : 'tree',
   };
 }
 
