@@ -22,6 +22,7 @@ const FILES: Record<string, { file: string; type: string }> = {
   '/app.js': { file: 'app.js', type: 'text/javascript; charset=utf-8' },
   '/filter.js': { file: 'filter.js', type: 'text/javascript; charset=utf-8' },
   '/history.js': { file: 'history.js', type: 'text/javascript; charset=utf-8' },
+  '/progress.js': { file: 'progress.js', type: 'text/javascript; charset=utf-8' },
   '/style.css': { file: 'style.css', type: 'text/css; charset=utf-8' },
 };
 
@@ -64,11 +65,17 @@ async function handle(request: IncomingMessage, response: ServerResponse, option
     // repositories not started yet are then not asked for, so the rate limit is not spent on nobody.
     const gone = new AbortController();
     response.once('close', () => response.writableFinished || gone.abort(new Error('The page left before the answer')));
+    // With `progress`, an organization's answer is a stream: its progress first, then the answer itself.
+    const stream = url.searchParams.has('progress') ? progressStream(response, gone.signal) : undefined;
     try {
-      const answer = await scanAnswer(url.searchParams.get('repo'), options, gone.signal);
-      if (!gone.signal.aborted) json(response, ...answer);
+      const answer = await scanAnswer(url.searchParams.get('repo'), options, gone.signal, stream?.progress);
+      if (gone.signal.aborted) return;
+      if (stream?.started()) stream.end(answer[1]);
+      else json(response, ...answer);
     } catch (error) {
-      if (!gone.signal.aborted) throw error; // nobody to answer
+      if (gone.signal.aborted) return; // nobody to answer
+      if (!stream?.started()) throw error;
+      stream.end({ error: error instanceof Error ? error.message : String(error) });
     }
     return;
   }
@@ -88,11 +95,12 @@ async function scanAnswer(
   input: string | null,
   { open, openOrganization, store }: WebOptions,
   signal: AbortSignal,
+  progress?: Progress,
 ): Promise<[number, unknown]> {
   try {
     if (!input?.trim()) throw new AtlasError('Enter a GitHub URL or a directory');
     const organization = openOrganization?.(input.trim());
-    if (organization) return [200, await organizationAnswer(await organization, open, store, signal)];
+    if (organization) return [200, await organizationAnswer(await organization, open, store, signal, progress)];
     const { result, stored } = await scan(await open(input.trim()), store);
     return [200, answer(result, stored)];
   } catch (error) {
@@ -106,8 +114,14 @@ async function scanAnswer(
  * it has and how many skills they hold; each repository with skills, as /api/scan answers it; the
  * warnings, each with its repository first.
  */
-async function organizationAnswer(organization: Organization, open: WebOptions['open'], store: Store | undefined, signal: AbortSignal) {
-  const scans = await scanOrganization(organization, open, store, signal);
+async function organizationAnswer(
+  organization: Organization,
+  open: WebOptions['open'],
+  store: Store | undefined,
+  signal: AbortSignal,
+  progress?: Progress,
+) {
+  const scans = await scanOrganization(organization, open, store, signal, progress);
   return {
     organization: {
       id: organization.id,
@@ -130,6 +144,31 @@ function answer({ repository, skills, warnings }: ScanResult, stored: string | n
     }),
     warnings,
     stored,
+  };
+}
+
+/** How many repositories of an organization are scanned, of how many. */
+type Progress = (scanned: number, repositories: number) => void;
+
+/**
+ * An answer as NDJSON, one object a line: `{ progress: { scanned, repositories } }` as the scan goes,
+ * then the answer, or `{ error }`. Starts with the first progress: an organization that cannot be
+ * opened, or a repository, is answered as JSON, as without it.
+ */
+function progressStream(response: ServerResponse, signal: AbortSignal) {
+  const line = (body: unknown) => response.write(`${JSON.stringify(body)}\n`);
+  return {
+    started: () => response.headersSent,
+    progress(scanned: number, repositories: number) {
+      if (signal.aborted) return;
+      if (!response.headersSent)
+        response.writeHead(200, { 'content-type': 'application/x-ndjson; charset=utf-8', 'cache-control': 'no-store' });
+      line({ progress: { scanned, repositories } });
+    },
+    end(body: unknown) {
+      line(body);
+      response.end();
+    },
   };
 }
 

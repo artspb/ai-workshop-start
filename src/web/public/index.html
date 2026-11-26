@@ -16,10 +16,12 @@
         <input id="repo" name="repo" type="text" required autocomplete="off" spellcheck="false"
           aria-label="GitHub URL or directory" placeholder="https://github.com/JetBrains/kotlin, https://github.com/JetBrains or ./path/to/checkout" />
         <button type="submit">Scan</button>
+        <button id="stop" type="button" hidden>Stop</button>
       </form>
     </header>
     <main>
       <p id="status" role="status" hidden></p>
+      <progress id="progress" hidden></progress>
       <details id="history" open hidden>
         <summary><h2>Scanned before</h2></summary>
         <ul></ul>

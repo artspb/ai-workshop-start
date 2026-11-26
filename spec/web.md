@@ -8,6 +8,12 @@ The core runs in the server; the page is a *thin client*: HTML, CSS and plain Ja
 - Local only: it listens on `127.0.0.1`, and answers only a `localhost`, `127.0.0.1` or `[::1]` host (`403` otherwise)
 ## The page
 - A box for the GitHub URL or the directory, and **Scan**
+- While a scan runs: what it scans, a progress bar, and **Stop**
+  - An organization: `<n> of <N> repositories` scanned, the bar filling as each one ends, scanned or skipped;
+    one repository: the bar runs, without a count
+  - **Stop** aborts the scan, as another scan does: the server asks GitHub for no repository not started yet.
+    The status says so, with how far it got; the address stays, the result is not shown;
+    the repositories scanned are stored scans of their own, in **Scanned before**
 - The repository, its skill count and the scanned commit; then every skill:
   **name**, the *whole* description, **link**, `also in` for copies; sorted as `scan`
 - A link to GitHub opens the file; a local `file://` link is shown as text, with **Copy**: a browser does not open it from a page
@@ -40,6 +46,10 @@ An organization, `?repo=github.com/<owner>` → `200` with JSON:
 - `organization.repositories` and `organization.skills`: counts, as the CLI prints them
 - `warnings`: every repository's, `<owner>/<repo>: <warning>`, a repository that cannot be scanned too
 - The rate limit, a rejected token, GitHub unreachable, no such owner: `400`, as the CLI's exit code 1
+- `&progress`, `?repo=github.com/<owner>&progress`: the answer is **NDJSON**, `application/x-ndjson`, one object a line,
+  `200` from the first line: `{ progress: { scanned, repositories } }`, `scanned` 0 first, then one more as each repository ends;
+  the last line the answer above, or `{ error }` when the scan fails on the way (the rate limit, a rejected token)
+  - No such owner, an error before the list: answered as without `&progress`; a repository, a directory: JSON, as without it
 - The page leaves before the answer (another scan, *back*, a reload, a closed tab): the request closes, and no repository
   not started yet is asked for; the ones started end, nothing is answered. The page aborts its scan before the next one, an empty address too
 

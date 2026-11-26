@@ -2,6 +2,7 @@
 // /?repo=<URL | directory | organization URL> scans, /?scan=<id> opens a stored scan.
 import { filterRepositories, filterSkills } from './filter.js';
 import { addressRequest, historyView, scanSignals, storedBox, storedOnPage } from './history.js';
+import { progressText, progressUrl, readAnswer, stoppedText } from './progress.js';
 
 const $ = (id) => document.getElementById(id);
 const form = $('scan');
@@ -10,6 +11,8 @@ const status = $('status');
 const result = $('result');
 const filter = $('filter');
 const earlier = $('history');
+const stop = $('stop');
+const bar = $('progress');
 
 /** The last scan's skills; the filter shows a part of them. */
 let skills = [];
@@ -21,6 +24,8 @@ let latest = 0;
 const nextScan = scanSignals();
 /** The stored scan on the page, if any: the one marked in Scanned before. */
 let shown = null;
+/** The scan running, for Stop: what it scans and how far it got; null when none runs. */
+let running = null;
 
 form.addEventListener('submit', (event) => {
   event.preventDefault();
@@ -31,6 +36,17 @@ form.addEventListener('submit', (event) => {
 });
 window.addEventListener('popstate', scanAddress);
 filter.addEventListener('input', showSkills);
+// Stop: the scan is aborted, as on another scan, so the server stops asking GitHub for it; the address stays.
+stop.addEventListener('click', () => {
+  if (!running) return;
+  const { repo, progress } = running;
+  latest++;
+  nextScan();
+  showRunning(null);
+  showStatus(stoppedText(repo, progress));
+  // The repositories scanned before the stop are stored.
+  showHistory();
+});
 // A stored scan opens in place: the address changes, the page does not reload.
 earlier.addEventListener('click', (event) => {
   const link = event.target.closest('a[data-scan]');
@@ -49,19 +65,26 @@ async function scanAddress() {
   const scan = ++latest;
   const signal = nextScan();
   shown = null;
+  showRunning(null);
   if (!request) {
     status.hidden = result.hidden = true;
     return showHistory();
   }
-  showStatus(request.repo ? `Scanning ${request.repo}…` : 'Opening the stored scan…');
+  showStatus(request.repo ? progressText(request.repo) : 'Opening the stored scan…');
+  if (request.repo) showRunning({ repo: request.repo, progress: null });
   result.hidden = true;
   let answer;
   try {
-    answer = await (await fetch(request.url, { signal })).json();
+    answer = await readAnswer(await fetch(progressUrl(request), { signal }), (progress) => {
+      if (scan !== latest) return;
+      showRunning({ repo: request.repo, progress });
+      showStatus(progressText(request.repo, progress));
+    });
   } catch (error) {
     answer = { error: `The Skill Atlas server does not answer: ${error.message}` };
   }
   if (scan !== latest) return;
+  showRunning(null);
   if (answer.error) {
     showStatus(answer.error, true);
   } else {
@@ -94,6 +117,16 @@ async function showHistory() {
     }),
   );
   earlier.hidden = view.hidden;
+}
+
+/** The scan running: Stop, and a bar, of the repositories scanned for an organization; none: both hidden. */
+function showRunning(scan) {
+  running = scan;
+  stop.hidden = bar.hidden = !scan;
+  if (scan?.progress) {
+    bar.max = Math.max(scan.progress.repositories, 1);
+    bar.value = scan.progress.scanned;
+  } else bar.removeAttribute('value');
 }
 
 function showStatus(text, error = false) {
