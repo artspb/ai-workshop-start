@@ -50,6 +50,14 @@ npm run typecheck && npm test && npm run e2e && ./skill-atlas scan ./fixture
 - `npm run e2e` needs `GITHUB_TOKEN`. When its output changes, every changed line in `tests/e2e/*.txt`
   must follow from the issue; only then rewrite them with `UPDATE=1 npm run e2e`, and say why in the pull request.
 - A skill copy in `.agents/skills` and `.claude/skills` stays byte-identical.
+- **Screenshots**: `npm run e2e` ends with the web view's visual tests (`npx playwright install --with-deps chromium` first).
+  A failing screenshot shows its expected, actual and diff in `playwright-report/` (`npx playwright show-report`).
+  - The issue changes the page on purpose: you, the author, accept the new screenshots. Look at each diff first: it shows
+    the change the issue asked for, and nothing else. Then `npm run e2e:update`, here, on Linux in the cloud (never on a Mac:
+    its fonts and rendering differ), and commit only the changed `tests/visual/**/*.png`, as a commit of their own,
+    `Accept new screenshots: <why>`, so the reviewer sees each before and after in the diff. Name them in the body.
+  - The issue does not change the page, or a screenshot changes more than it asks for: a regression; fix the code,
+    never accept it.
 
 ## 5. Demo, when a person would see the change
 - **The web view changed** (`src/web/`): record a short video of it, below.
@@ -119,7 +127,7 @@ The body:
 - `Closes #<n>`
 - **What changed**: for the user, in two or three lines.
 - **Decisions**: what you wrote into the spec, and why, where the issue left a choice.
-- **Tests**: the cases added; e2e output changes and why.
+- **Tests**: the cases added; e2e output changes and why; the screenshots accepted, each with why.
 - **Demo**: the GIF and the video (section 5), the CLI's output as text, or "No demo: <why>".
 - **Open questions**: what a reviewer should decide.
 - **Filed**: the issues you filed or commented on, `#<m>`, if any.

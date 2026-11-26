@@ -1,5 +1,5 @@
-# CI for your Skill Atlas repository: the typecheck, the tests and the CLI itself, on every push
-# and pull request, on a clean machine. A pull request is ready when this is green.
+# CI for your Skill Atlas repository: the typecheck, the tests, the web view's screenshots and the CLI itself,
+# on every push and pull request, on a clean machine. A pull request is ready when this is green.
 name: CI
 on:
   push:
@@ -12,7 +12,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -22,10 +22,32 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      # The browser of the web view's visual tests, and what it needs to run.
+      - run: npx playwright install --with-deps chromium
       # Real repositories at fixed commits, on live GitHub; the token raises the rate limit.
-      - run: npm run e2e
+      # Then the web view's visual tests, against the screenshots committed in tests/visual (spec/web.md#visual-tests).
+      - id: e2e
+        run: npm run e2e
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # A failure: the Playwright report, with the expected, actual and diff images and every test's video.
+      - id: report
+        if: failure() && steps.e2e.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+      - if: failure() && steps.report.outputs.artifact-url
+        env:
+          REPORT: ${{ steps.report.outputs.artifact-url }}
+        run: |
+          {
+            echo '## The visual tests failed'
+            echo "[The Playwright report]($REPORT): download it, unzip it, then \`npx playwright show-report <its folder>\`."
+            echo 'A change to the page on purpose: accept its screenshots with `npm run e2e:update`, on Linux (AGENTS.md).'
+          } >> "$GITHUB_STEP_SUMMARY"
       # The real CLI on the fixture repository, as a user would run it: it must exit 0; the web view must answer.
       - name: Smoke test
         run: |

@@ -82,3 +82,26 @@ the skills of each repository's latest stored scan that match, by name, descript
 - `sentence`: the description's first sentence, `''` without one; `refs`: the stored scan's; `scan`: its id, for `/api/scans/<id>`
 - No word in `q`, or no store: `{ results: [], more: 0 }`
 - Each stored file is read once a search
+## Visual tests
+The page as a user sees it, on CI: the key moments of its demos as **Playwright** tests, `tests/visual/`,
+each screenshot against a **baseline** committed next to them. A changed pixel fails the check.
+- `npm run e2e` runs them after the CLI's; `@playwright/test` 1.65.1, a dev dependency (1.49.1 hangs on Node 26)
+- **The same data**: `./fixture`, copied to `/tmp/skill-atlas-visual/fixture`, so its local links read the same on every
+  machine; a store (`SKILL_ATLAS_CACHE`) each test seeds with fixed stored scans, each at a fixed `scannedAt`.
+  No live GitHub, no `GITHUB_TOKEN`: GitHub answers from a recording
+- **The same rendering**: Chromium only, a 1280×800 viewport, scale 1, `en-US`, UTC, light, reduced motion;
+  the page's clock fixed (Playwright's), no animations, the caret hidden
+  - **The fonts**: DejaVu Sans and DejaVu Sans Mono, shipped with the tests (`tests/visual/fonts/`), the only fonts the
+    browser sees (`FONTCONFIG_FILE`): every font the page asks for is one of them, a monospace one the mono
+- **The screenshots**, 1280×800 each: the empty page; a scanned directory; the filter applied; **Scanned before** with
+  stored scans; a stored scan opened; the search across stored scans, then its `and <M> more`; an error, the rate limit
+  with when it resets. Nothing masked: the data and the clock keep it all stable. No tolerance: not a pixel, not a shade
+- **Every test recorded**, a video of each run, kept with the report (`playwright-report/`)
+- **On CI**: Chromium installed (`npx playwright install --with-deps chromium`); a failure uploads the report as an
+  artifact, `playwright-report` (the expected, actual and diff images, and the videos), linked from the job summary
+- **Baselines on Linux**, as CI runs them, never on a Mac: its fonts and rendering differ
+  - A missing baseline fails; only `npm run e2e:update` writes one, and only on Linux
+  - **Accepting a new baseline**: a pull request that changes the page on purpose fails until its author accepts the new
+    screenshots: `npm run e2e:update`, on Linux in the cloud, committed on its own, `Accept new screenshots: <why>`,
+    so a reviewer sees each before and after in the diff. Its review checks that they show the change the issue
+    asked for, and nothing else
