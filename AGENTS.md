@@ -3,6 +3,8 @@
 Read [./spec](spec/) first. Update it with the code.
 ## Tests
 Integration tests for every case in the spec.
+## Skills
+Each skill is in `.agents/skills/<name>/SKILL.md` and `.claude/skills/<name>/SKILL.md`, byte-identical: [tests/skills.test.ts](tests/skills.test.ts).
 ## Definition of done
 - All tests pass locally: `npm test` and `npm run e2e`
 - The CI build ([.github/workflows/ci.yml](.github/workflows/ci.yml)) is green
