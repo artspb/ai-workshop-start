@@ -69,9 +69,9 @@ gh api repos/{owner}/{repo}/pulls/<n>/reviews --method POST --input review.json
 }
 ```
 - `event`: `REQUEST_CHANGES` with a **blocking** comment, else `COMMENT`. Never `APPROVE`: merging is a person's call.
-- On your own pull request, GitHub rejects `REQUEST_CHANGES` (422) and the whole review is lost: when
-  `gh api user -q .login` is the author (`gh pr view <n> --json author -q .author.login`), post `COMMENT`;
-  the **blocking** labels and the summary's verdict still say what blocks.
+- On your own pull request, GitHub rejects `REQUEST_CHANGES` with a 422 and the whole review is lost. If the post returns 422,
+  post the same review again with `"event": "COMMENT"`; the **blocking** labels and the summary's verdict still say what blocks.
+  Don't look the author up first: `gh api user` gives no answer for a GitHub App token (403).
 - `line` is the line in the new file; a range adds `start_line`.
 
 ## Example
