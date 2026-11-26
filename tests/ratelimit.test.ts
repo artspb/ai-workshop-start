@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { run } from '../src/commands.ts';
 import { openGitHub, openGitHubOwner, parseGitHubOwner, type GitHubOptions } from '../src/core/github.ts';
-import { replay, type Recorded, type Recording } from '../src/core/replay.ts';
+import { type Recorded, type Recording } from '../src/core/replay.ts';
+import { replayGraphQL } from './helpers.ts';
 import { errorText } from '../src/web/public/progress.js';
 import { createWebServer, listen } from '../src/web/server.ts';
 
@@ -50,7 +51,7 @@ const secondary = (seconds: number): Recorded => ({
 
 /** `skill-atlas scan <input>` as the CLI runs it, with or without a token, GitHub answering from the recording. */
 async function atlas(input: string, github: Recording, token = true) {
-  const options: GitHubOptions = { fetch: replay(github), token: token ? 'test' : undefined };
+  const options: GitHubOptions = { fetch: replayGraphQL(github), token: token ? 'test' : undefined };
   const stderr: string[] = [];
   const code = await run(['scan', input], {
     open: (repo) => openGitHub(repo, options),
@@ -184,7 +185,7 @@ test('the page: the reset time in the viewer\'s local time and format; without G
 
 /** /api/scan on a web view whose GitHub answers from the recording; `progress` adds &progress. */
 async function serve(t: { after(fn: () => unknown): void }, github: Recording, token = true) {
-  const options: GitHubOptions = { fetch: replay(github), token: token ? 'test' : undefined };
+  const options: GitHubOptions = { fetch: replayGraphQL(github), token: token ? 'test' : undefined };
   const server = createWebServer({
     open: (repo) => openGitHub(repo, options),
     openOrganization: (repo) => (parseGitHubOwner(repo) ? openGitHubOwner(repo, options) : undefined),

@@ -38,6 +38,23 @@ a regular file named exactly `SKILL.md` at **`<root>/<name>/SKILL.md`**.
   - A file that answers 404 with the token: the token is checked (`/rate_limit`, no request of the limit); rejected → the scan stops,
     not "not found": the file host answers 404, not 401, for a token it does not accept
 - 8 repositories at a time
+- **Requests**: a repository already stored costs no request of its own; see [the budget](#the-request-budget)
+  - No repository lookup: the list gives each one's `full_name` and default branch
+  - With `GITHUB_TOKEN`, the default branches' commits **in bulk**: one GraphQL query per 100 repositories, in the scan's order,
+    asked once the scan reaches the first of them; on GraphQL's own rate limit
+    - A repository GraphQL answers without a commit (empty, no default branch, a default branch other than the list's,
+      not found) → the REST commit request for that one, as without a token
+    - A query GitHub fails (an error answer, no `data`): its repositories as without a token;
+      the rate limit, `RATE_LIMITED` in its `errors` too, a rejected token, GitHub unreachable: the scan stops
+  - Without `GITHUB_TOKEN`: one REST commit request per repository; GraphQL needs a token
+  - Then a repository whose commit is stored is served from the store, no other request; else its tree and files, as `scan`
+  - Progress and Stop count every repository, a stored one too; the output, the warnings and the store's keys are those of
+    each repository scanned on its own as `/tree/<default branch>`
+### The request budget
+A rescan with every repository stored, with `GITHUB_TOKEN`: `GET /users/<owner>`, the list pages (100 a page),
+and one GraphQL query per 100 repositories; **nothing else**. JetBrains, 2,600 repositories: 1 + 27 + 26 requests.
+- Each repository not stored adds its tree (and the files of its skills)
+- Without `GITHUB_TOKEN`: one commit request per repository instead of the GraphQL queries
 ## Rate limit
 GitHub refuses a request for the rate limit: `403` or `429` saying *rate limit*, or `429` on a file read. The scan stops,
 an organization's too, exit code 1, and the error tells **when the limit resets**, if GitHub said so:
