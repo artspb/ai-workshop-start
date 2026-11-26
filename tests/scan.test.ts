@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { test } from 'node:test';
 import { run } from '../src/commands.ts';
 import { findSkills } from '../src/core/find.ts';
@@ -190,4 +190,16 @@ test('/tree/<ref>: that commit, listed through its tree even with a token; an un
     message: 'Not found in https://github.com/JetBrains/example: no-such-ref',
   });
   assert.equal(parseGitHubUrl('github.com/JetBrains/example/tree/main/docs'), undefined);
+});
+
+test("this repository's code-review skill: the .claude/skills file is a copy of the .agents/skills one", async () => {
+  // An edit to one copy and not the other turns one skill into two: the scan would list both.
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  const scanned = await atlas(['scan', root]);
+  assert.equal(scanned.code, 0, scanned.stderr);
+  const lines = scanned.stdout.split('\n');
+  const reviews = lines.flatMap((line, index) => (line.startsWith('code-review — ') ? [lines.slice(index, index + 3)] : []));
+  assert.equal(reviews.length, 1, scanned.stdout);
+  assert.match(reviews[0][1], /\/\.agents\/skills\/code-review\/SKILL\.md$/);
+  assert.equal(reviews[0][2], '  also in .claude/skills/code-review/SKILL.md');
 });
