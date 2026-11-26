@@ -9,16 +9,17 @@ every skill with its whole description, a copy, a local link to copy, a warning.
 
 ## Steps
 1. Open the server's URL.
-   - See: the title "Skill Atlas"; an empty box, "GitHub URL or directory"; a **Scan** button.
+   - See: the title "Skill Atlas"; an empty box, showing only its hint,
+     "https://github.com/JetBrains/kotlin, https://github.com/JetBrains or ./path/to/checkout"; a **Scan** button.
      No result, no **Scanned before**, no **Stop**.
 2. Type `./fixture` in the box, then press **Scan**.
    - See: the heading "fixture · 5 skills", and "local directory" beside it. The address ends with `/?repo=.%2Ffixture`.
      **Stop** is hidden again.
 3. Read the skills, top to bottom.
    - See: five skills, in this order: "code-style", "commits", "gradle-bump", "release-checklist", "release-checklist".
-     The first "release-checklist" has no description; the second reads "Steps before a release."
+     The first "release-checklist" has no description; the second reads "Steps before a release. Tag, write the notes, announce."
 4. Look at "commits".
-   - See: "Write commit messages the way this repository does."; its link as text, not a link, ending with
+   - See: "Write commit messages the way this repository does. Use for every commit."; its link as text, not a link, ending with
      `/fixture/.agents/skills/commits/SKILL.md`, and a **Copy** button beside it;
      then "also in .claude/skills/commits/SKILL.md".
 5. Press **Copy** beside the link of "commits".
