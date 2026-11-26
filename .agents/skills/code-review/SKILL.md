@@ -35,8 +35,9 @@ gh api repos/{owner}/{repo}/pulls/<n>/comments    # earlier inline comments
   A push and a submitted review both start this skill, so read the reviews **again right before you post**:
   a review of yours newer than the last one you read has appeared meanwhile → post nothing.
 - **CI is a fact, not a finding to repeat**: if a check fails, link the failing job in the summary; don't rerun what CI runs.
-- **A re-review**, after a new push or a new answer: review what changed since your last review. Fetch it with the
-  history: a checkout can be shallow, and a shallow one finds no merge base.
+- **A re-review**, after a new push or a new answer: on a new head, first decide whether it needs a full review
+  (below: a rebase of a completed review gets a light check). A full re-review reviews what changed since your last
+  review. Fetch it with the history: a checkout can be shallow, and a shallow one finds no merge base.
   ```sh
   git fetch $(git rev-parse --is-shallow-repository | grep -qx true && echo --unshallow) \
     origin +refs/heads/<baseRefName>:refs/remotes/origin/<baseRefName> <last reviewed commit> <head>
@@ -52,6 +53,45 @@ gh api repos/{owner}/{repo}/pulls/<n>/comments    # earlier inline comments
 
   Don't repeat an open comment. Settle your earlier threads (section 4) and say in the summary which earlier findings
   are fixed and which threads stay open.
+
+### A new head: a light check or a full review
+The first step of a re-review on a new head. A rebase of a completed review (merge-when-reviewed's section 4,
+or a person's) gets a **light check**, not the whole review again, when **all** of these hold:
+- **The previous review is completed**, as merge-when-reviewed's checks 2–3 read it: your last review (above) is on
+  its own head, `<reviewed head>` (its `commit_id`), its summary starts with `Nothing blocks`, it has no findings
+  (no inline comment of it starts a thread, none is named in the summary), and every thread is resolved.
+- **The new head only rebases it**. Fetch with the history (a shallow checkout finds no merge base; fetch full SHAs,
+  a short one is not fetched), then read the range-diff:
+  ```sh
+  git fetch $([ "$(git rev-parse --is-shallow-repository)" = true ] && echo --unshallow) origin \
+    "+refs/heads/<baseRefName>:refs/remotes/origin/<baseRefName>" <reviewed head> <head>
+  B=$(git merge-base origin/<baseRefName> <head>)
+  git range-diff "$B" <reviewed head> <head>
+  git cherry -v <head> <reviewed head>    # -: its change is in the head; +: it is not, or not as it was
+  ```
+  Each of the pull request's commits pairs with one of the head's: `=` (unchanged), or `!` only in a file whose
+  conflict a rebase comment on the pull request names (merge-when-reviewed's `Rebased onto …`). The comment only
+  points at the files; the range-diff decides. A `<` line is fine only for a commit `git cherry` marks `-`:
+  the base gained it already, e.g. a stacked pull request that was merged. Any `>` line, a `<` marked `+`,
+  or a `!` in a file no rebase comment names: not only a rebase.
+- **Nothing asks you something**: no comment or review newer than your last review asks Code Review anything.
+
+Then the light check, and nothing more:
+1. Read the range-diff and each conflict resolution in it, against what the base gained in that file
+   (`git log -p <reviewed head>..origin/<baseRefName> -- <file>`): both sides' changes kept, nothing dropped,
+   nothing beyond what the conflict required.
+2. CI is green on the head: `gh pr checks <n> --watch`, every check passes.
+3. Post one review (section 6), `COMMENT`, no inline comments, with one short summary that starts with `Nothing blocks`,
+   as merge-when-reviewed reads it:
+   `Nothing blocks: a rebase of <reviewed head> onto <baseRefName> (<short sha of $B>), the pull request's commits
+   unchanged; CI is green.`, or with conflicts `…, resolved in <files> as <how>; CI is green.`
+   Read the reviews again right before you post (above).
+
+No checkout, no install, no reproduction runs, and no new findings on code the previous review already covered.
+
+**A full review**, as below, when anything else holds: a commit with new content, a resolution that changes
+behaviour, a range-diff that doesn't line up, a check that fails, a previous review that was not completed, or a
+question for you. **When unsure, review fully.**
 
 ## 2. Reproduce
 Check out the pull request (`gh pr checkout <n>`) and reproduce every finding there.
