@@ -3,13 +3,15 @@
 import { readFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { AtlasError } from '../core/errors.ts';
-import { parseGitHubOwner } from '../core/github.ts';
 import { skillLink } from '../core/model.ts';
+import { scanOrganization, type Organization } from '../core/organization.ts';
 import { scan, type ScanResult, type Source, type Store } from '../core/scan.ts';
 
 export type WebOptions = {
   /** Opens what the page asked to scan, as the CLI does. */
   open(input: string): Promise<Source>;
+  /** Opens the organization or user the page asked to scan, as the CLI does; undefined when the input is not one. */
+  openOrganization?(input: string): Promise<Organization> | undefined;
   /** Earlier scans, shared with the CLI; without one, every scan runs. */
   store?: Store;
 };
@@ -70,16 +72,36 @@ async function handle(request: IncomingMessage, response: ServerResponse, option
   response.writeHead(200, { 'content-type': page.type, 'cache-control': 'no-cache' }).end(body);
 }
 
-async function scanAnswer(input: string | null, { open, store }: WebOptions): Promise<[number, unknown]> {
+async function scanAnswer(input: string | null, { open, openOrganization, store }: WebOptions): Promise<[number, unknown]> {
   try {
     if (!input?.trim()) throw new AtlasError('Enter a GitHub URL or a directory');
-    if (parseGitHubOwner(input)) throw new AtlasError(`An organization is scanned by the CLI only: skill-atlas scan ${input.trim()}`);
+    const organization = openOrganization?.(input.trim());
+    if (organization) return [200, await organizationAnswer(await organization, open, store)];
     const { result, stored } = await scan(await open(input.trim()), store);
     return [200, answer(result, stored)];
   } catch (error) {
     if (error instanceof AtlasError) return [400, { error: error.message }];
     throw error;
   }
+}
+
+/**
+ * An organization as the page reads it, as the CLI prints it: the owner with how many repositories
+ * it has and how many skills they hold; each repository with skills, as /api/scan answers it; the
+ * warnings, each with its repository first.
+ */
+async function organizationAnswer(organization: Organization, open: WebOptions['open'], store?: Store) {
+  const scans = await scanOrganization(organization, open, store);
+  return {
+    organization: {
+      id: organization.id,
+      url: organization.url,
+      repositories: scans.length,
+      skills: scans.reduce((total, { result }) => total + (result?.skills.length ?? 0), 0),
+    },
+    repositories: scans.flatMap(({ result, stored }) => (result?.skills.length ? [answer(result, stored)] : [])),
+    warnings: scans.flatMap(({ id, result, error }) => (result ? result.warnings : [error]).map((warning) => `${id}: ${warning}`)),
+  };
 }
 
 /** A result as the page reads it: every skill with its link, and the stored scan's id, if stored. */

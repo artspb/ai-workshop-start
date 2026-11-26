@@ -14,3 +14,17 @@ export function filterSkills(skills, query) {
     return words.every((word) => text.includes(word));
   });
 }
+
+/**
+ * An organization's repositories, each with only its skills the query matches, as `filterSkills`
+ * does; a repository with none is left out.
+ * @template {{ skills: { name: string, description: string }[] }} R
+ * @param {R[]} repositories
+ * @param {string} query
+ * @returns {R[]}
+ */
+export function filterRepositories(repositories, query) {
+  return repositories
+    .map((repository) => ({ ...repository, skills: filterSkills(repository.skills, query) }))
+    .filter((repository) => repository.skills.length > 0);
+}

@@ -9,6 +9,7 @@ import { run } from '../src/commands.ts';
 import { openGitHub, openGitHubOwner, parseGitHubOwner, parseGitHubUrl, type Fetch } from '../src/core/github.ts';
 import { replay, type Recording } from '../src/core/replay.ts';
 import { openStore } from '../src/store.ts';
+import { createWebServer, listen } from '../src/web/server.ts';
 
 const API = 'https://api.github.com';
 const commitOf = (name: string) => name.padEnd(40, '0').replace(/[^0-9a-f]/g, 'a').slice(0, 40);
@@ -297,4 +298,117 @@ test('a repository still scans as one, with an organization client', async () =>
   const scanned = await atlas(['scan', 'github.com/JetBrains/zeta/tree/main']);
   assert.equal(scanned.code, 0, scanned.stderr);
   assert.equal(scanned.stdout.split('\n')[0], 'JetBrains/zeta · 1 skill');
+});
+
+/**
+ * `skill-atlas serve` as the CLI starts it, with a token, GitHub answering from the recording;
+ * `get` asks /api/scan for an input.
+ */
+async function serve(t: { after(fn: () => unknown): void }, { github = recording(), store = undefined as ReturnType<typeof openStore> | undefined } = {}) {
+  const fetch = replay(github);
+  const server = createWebServer({
+    open: (input) => openGitHub(input, { fetch, token: 'test' }),
+    openOrganization: (input) => (parseGitHubOwner(input) ? openGitHubOwner(input, { fetch, token: 'test' }) : undefined),
+    store,
+  });
+  const base = await listen(server, 0);
+  t.after(() => server.close());
+  return async (repo: string) => {
+    const response = await globalThis.fetch(`${base}/api/scan?repo=${encodeURIComponent(repo)}`);
+    return { status: response.status, body: (await response.json()) as any };
+  };
+}
+
+test('the web view, an organization: the counts, each repository with skills as /api/scan answers it, sorted; the warnings with their repository', async (t) => {
+  const get = await serve(t);
+  const { status, body } = await get('https://github.com/JetBrains/');
+  assert.equal(status, 200, JSON.stringify(body));
+  assert.deepEqual(body.organization, { id: 'JetBrains', url: 'https://github.com/JetBrains', repositories: 101, skills: 4 });
+  assert.deepEqual(
+    body.repositories.map(({ repository, skills }: any) => [repository.id, skills.map((skill: any) => [skill.name, skill.link, skill.copies])]),
+    [
+      [
+        'JetBrains/Alpha',
+        [
+          ['broken', `https://github.com/JetBrains/Alpha/blob/${commitOf('Alpha')}/.github/skills/broken/SKILL.md`, []],
+          ['review', `https://github.com/JetBrains/Alpha/blob/${commitOf('Alpha')}/.agents/skills/review/SKILL.md`, ['.claude/skills/review/SKILL.md']],
+        ],
+      ],
+      ['JetBrains/kotlin', [['bump', `https://github.com/JetBrains/kotlin/blob/${commitOf('kotlin')}/tools/.claude/skills/bump/SKILL.md`, []]]],
+      ['JetBrains/zeta', [['release', `https://github.com/JetBrains/zeta/blob/${commitOf('zeta')}/.claude/skills/release/SKILL.md`, []]]],
+    ],
+  );
+  // Each repository as /api/scan answers it: the whole description, its own warnings, not stored without a store.
+  const zeta = body.repositories[2];
+  assert.equal(zeta.skills[0].description, 'Release zeta. Then announce it.');
+  assert.deepEqual(zeta.warnings, []);
+  assert.equal(zeta.stored, null);
+  assert.deepEqual(body.repositories[0].warnings, ['.github/skills/broken/SKILL.md: no front matter; using the directory name']);
+  // The same as the CLI prints, an empty repository's warning too.
+  const cli = await atlas(['scan', 'https://github.com/JetBrains/']);
+  assert.deepEqual(body.warnings.map((warning: string) => `warning: ${warning}`).join('\n'), cli.stderr);
+  assert.deepEqual(body.warnings, [
+    'JetBrains/Alpha: .github/skills/broken/SKILL.md: no front matter; using the directory name',
+    `JetBrains/empty: GitHub answered 409 for ${API}/repos/JetBrains/empty/commits/main: Git Repository is empty.`,
+  ]);
+});
+
+test('the web view, a user: the repositories they own; an owner without skills: only the counts', async (t) => {
+  const user = await (await serve(t))('github.com/artspb');
+  assert.equal(user.status, 200);
+  assert.deepEqual(user.body.organization, { id: 'artspb', url: 'https://github.com/artspb', repositories: 1, skills: 1 });
+  assert.deepEqual(user.body.repositories.map(({ repository }: any) => repository.id), ['artspb/workshop']);
+  const none = await (
+    await serve(t, { github: recording({ [`${API}/users/artspb/repos?type=owner&per_page=100&page=1`]: { status: 200, body: [] } }) })
+  )('github.com/artspb');
+  assert.deepEqual(none, {
+    status: 200,
+    body: { organization: { id: 'artspb', url: 'https://github.com/artspb', repositories: 0, skills: 0 }, repositories: [], warnings: [] },
+  });
+});
+
+test('the web view, an organization that cannot be scanned: no such owner, the rate limit, a rejected token, GitHub unreachable → 400 with the CLI message', async (t) => {
+  assert.deepEqual(await (await serve(t))('github.com/nobody'), {
+    status: 400,
+    body: { error: 'Organization or user not found: https://github.com/nobody' },
+  });
+  const limited = { status: 403, body: { message: 'API rate limit exceeded for user ID 1.' } };
+  assert.deepEqual(await (await serve(t, { github: recording({ [`${API}/repos/JetBrains/repo-50`]: limited }) }))('github.com/JetBrains'), {
+    status: 400,
+    body: { error: 'GitHub rate limit reached; try again in a minute' },
+  });
+  const rejected = { status: 401, body: { message: 'Bad credentials' } };
+  assert.deepEqual(await (await serve(t, { github: recording({ [`${API}/repos/JetBrains/Alpha`]: rejected }) }))('github.com/JetBrains'), {
+    status: 400,
+    body: { error: 'GitHub rejected the token in GITHUB_TOKEN' },
+  });
+  const github = recording();
+  delete github[`${API}/repos/JetBrains/beta`];
+  const unreachable = await (await serve(t, { github }))('github.com/JetBrains');
+  assert.equal(unreachable.status, 400);
+  assert.match(unreachable.body.error, /^Cannot reach GitHub: not recorded: /);
+});
+
+test('the web view, an organization: each repository is a stored scan of its own, shared with the CLI', async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), 'skill-atlas-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const store = openStore(directory);
+  const { status, body } = await (await serve(t, { store }))('github.com/JetBrains');
+  assert.equal(status, 200);
+  const stored = await store.list();
+  assert.equal(stored.length, 100);
+  for (const { repository, stored: id } of body.repositories) {
+    assert.equal(stored.find((scan) => scan.id === id)?.repository.id, repository.id, repository.id);
+  }
+  // The CLI finds them stored: no tree, no file read again.
+  const cli = await atlas(['scan', 'github.com/JetBrains'], { store });
+  assert.equal(cli.code, 0, cli.stderr);
+  assert.deepEqual(cli.asked.filter((url) => url.includes('/git/trees/') || url.startsWith('https://raw.')), []);
+});
+
+test('the web view, a repository still scans as one, with an organization client', async (t) => {
+  const { status, body } = await (await serve(t))('github.com/JetBrains/zeta/tree/main');
+  assert.equal(status, 200);
+  assert.equal(body.repository.id, 'JetBrains/zeta');
+  assert.equal(body.organization, undefined);
 });
