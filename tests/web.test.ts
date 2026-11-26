@@ -44,11 +44,11 @@ test('the page: a box, Scan, a filter, the warnings and the scans before, as HTM
   }
 });
 
-test('the page: Scanned before comes before the status and the result, and collapses; open at first', async () => {
+test('the page: Scanned before comes after the status, before the result, and collapses; open at first', async () => {
   const html = await (await fetch(`${base}/`)).text();
   const history = html.indexOf('<details id="history" open hidden>');
   assert.ok(history > 0, 'Scanned before is a <details>, open');
-  assert.ok(history < html.indexOf('id="status"'), 'before the status');
+  assert.ok(html.indexOf('id="status"') > 0 && html.indexOf('id="status"') < history, 'after the status');
   assert.ok(history < html.indexOf('id="result"'), 'before the result');
   assert.match(html.slice(history), /^<details id="history" open hidden>\s*<summary><h2>Scanned before<\/h2><\/summary>/);
 });
