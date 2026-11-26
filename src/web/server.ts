@@ -72,9 +72,8 @@ async function handle(request: IncomingMessage, response: ServerResponse, option
 async function scanAnswer(input: string | null, { open, store }: WebOptions): Promise<[number, unknown]> {
   try {
     if (!input?.trim()) throw new AtlasError('Enter a GitHub URL or a directory');
-    const source = await open(input.trim());
-    const result = await scan(source, store);
-    return [200, answer(result, store && source.key ? store.id(source.key) : null)];
+    const { result, stored } = await scan(await open(input.trim()), store);
+    return [200, answer(result, stored)];
   } catch (error) {
     if (error instanceof AtlasError) return [400, { error: error.message }];
     throw error;

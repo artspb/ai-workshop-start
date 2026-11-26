@@ -16,18 +16,18 @@ The core runs in the server; the page is a *thin client*: HTML, CSS and plain Ja
 - The address holds the scan: `/?repo=<URL | directory>` scans on open; each scan updates it; *back* scans again
 - An error: its message, in place of the result
 - **Scanned before**: every [stored scan](analysis.md#persistence), the latest first: the repository, the commit,
-  what was asked for (`main (default branch)`, a `/tree/<ref>`), the skill count, the warning count and when;
+  every ref asked for (`main (default branch)`, a `/tree/<ref>`), the skill count, the warning count and when;
   only the stored scan on the page is marked, by its id
   - One opens *as stored*, without GitHub: `/?scan=<id>`; the box then holds `<repository URL>/tree/<commit>`
   - Updated after each scan; hidden while nothing is stored
 ## API
 `GET /api/scan?repo=<URL | directory>` → `200` with JSON:
 `{ repository, skills: [{ id, name, description, path, commit, copies, link }], warnings, stored }`
-- `stored`: the id of the [stored scan](analysis.md#persistence), as `/api/scans` lists it; `null` when not stored (a local directory, code search)
+- `stored`: the id of the [stored scan](analysis.md#persistence), as `/api/scans` lists it; `null` when not stored (a local directory, code search, a store that cannot be written)
 - An error the CLI reports with exit code 1 (no `repo`, unreachable, not found): `400`, `{ error: <message> }`
 - Anything else: `500`, `{ error }`; an unknown path: `404`
 
-`GET /api/scans` → `200`, `{ scans: [{ id, repository, ref, skills, warnings, scannedAt }] }`: the stored scans, the latest first;
+`GET /api/scans` → `200`, `{ scans: [{ id, repository, refs, skills, warnings, scannedAt }] }`: the stored scans, the latest first;
 `skills` and `warnings` are counts, `scannedAt` an ISO 8601 time
 
 `GET /api/scans/<id>` → `200`, the stored result, as `/api/scan` answers it, `stored` being `<id>`; no such scan: `404`, `{ error }`

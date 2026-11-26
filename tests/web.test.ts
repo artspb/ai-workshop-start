@@ -183,10 +183,10 @@ test('a stored scan on the page: the box holds <repository URL>/tree/<commit>', 
 test('Scanned before: hidden while nothing is stored; a row per scan, in order; only the one on the page marked', () => {
   assert.deepEqual(historyView([], 'a'), { hidden: true, rows: [] });
   const repository = { id: 'JetBrains/example', commit: EXAMPLE_COMMIT };
-  // The same commit twice: the default branch and /tree/<commit>, told apart by what was asked for.
+  // The same commit twice: the default branch and /tree/<ref>, told apart by every ref asked for.
   const scans = [
-    { id: 'b', repository, ref: 'main (default branch)', skills: 1, warnings: 0, scannedAt: '2026-11-26T10:01:00.000Z' },
-    { id: 'a', repository, ref: EXAMPLE_COMMIT, skills: 2, warnings: 1, scannedAt: '2026-11-26T10:00:00.000Z' },
+    { id: 'b', repository, refs: ['main (default branch)'], skills: 1, warnings: 0, scannedAt: '2026-11-26T10:01:00.000Z' },
+    { id: 'a', repository, refs: [EXAMPLE_COMMIT, 'v1.0'], skills: 2, warnings: 1, scannedAt: '2026-11-26T10:00:00.000Z' },
   ];
   const view = historyView(scans, 'a', (iso: string) => iso.slice(11, 16));
   assert.equal(view.hidden, false);
@@ -206,7 +206,7 @@ test('Scanned before: hidden while nothing is stored; a row per scan, in order; 
       name: 'JetBrains/example',
       commit: EXAMPLE_COMMIT,
       short: EXAMPLE_COMMIT.slice(0, 12),
-      details: `${EXAMPLE_COMMIT} · 2 skills · 1 warning · 10:00`,
+      details: `${EXAMPLE_COMMIT}, v1.0 · 2 skills · 1 warning · 10:00`,
       current: true,
     },
   ]);

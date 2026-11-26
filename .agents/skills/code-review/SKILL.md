@@ -42,7 +42,8 @@ No finding without a check: what you cannot reproduce, leave out or ask as a **q
   An unexplained change there is a regression until shown otherwise.
 - A changed `fixture/`: its case is in the table in `fixture/README.md`.
 - The web view: `GITHUB_TOKEN` stays in the server, never in a page or a response.
-- Nothing is stored: neither the CLI nor the server writes files.
+- Only the scan store is written ([persistence](../../../spec/analysis.md#persistence)): GitHub scans listed through a tree,
+  by commit. Never a local directory or a code-search scan, and no other file.
 - No style nits the typecheck catches. See [AGENTS.md](../../../AGENTS.md) for the definition of done.
 
 ## 4. Write

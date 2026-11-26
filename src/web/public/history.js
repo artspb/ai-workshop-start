@@ -26,7 +26,7 @@ export function storedBox(repository) {
 /**
  * Scanned before: hidden while nothing is stored; else a row per stored scan, in the server's
  * order, the latest first, and only the one on the page marked, by its id.
- * @param {{ id: string, repository: { id: string, commit: string }, ref: string, skills: number, warnings: number, scannedAt: string }[]} scans
+ * @param {{ id: string, repository: { id: string, commit: string }, refs: string[], skills: number, warnings: number, scannedAt: string }[]} scans
  * @param {string | null | undefined} shown the stored scan on the page, if any
  * @param {(iso: string) => string} [time] how a time is shown
  */
@@ -40,7 +40,7 @@ export function historyView(scans, shown, time = (iso) => new Date(iso).toLocale
       name: scan.repository.id,
       commit: scan.repository.commit,
       short: scan.repository.commit.slice(0, 12),
-      details: [scan.ref, count(scan.skills, 'skill'), ...(scan.warnings ? [count(scan.warnings, 'warning')] : []), time(scan.scannedAt)].join(' · '),
+      details: [scan.refs.join(', '), count(scan.skills, 'skill'), ...(scan.warnings ? [count(scan.warnings, 'warning')] : []), time(scan.scannedAt)].join(' · '),
       current: Boolean(shown) && scan.id === shown,
     })),
   };
