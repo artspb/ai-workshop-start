@@ -59,7 +59,19 @@ async function handle(request: IncomingMessage, response: ServerResponse, option
   if (!LOCAL_HOSTS.has(host)) return json(response, 403, { error: `Not a local host: ${host}` });
   const url = new URL(request.url ?? '/', 'http://localhost');
   if (request.method !== 'GET' && request.method !== 'HEAD') return json(response, 405, { error: 'GET only' });
-  if (url.pathname === '/api/scan') return json(response, ...(await scanAnswer(url.searchParams.get('repo'), options)));
+  if (url.pathname === '/api/scan') {
+    // The page that asked may leave (another scan, back, a reload, a closed tab): an organization's
+    // repositories not started yet are then not asked for, so the rate limit is not spent on nobody.
+    const gone = new AbortController();
+    response.once('close', () => response.writableFinished || gone.abort(new Error('The page left before the answer')));
+    try {
+      const answer = await scanAnswer(url.searchParams.get('repo'), options, gone.signal);
+      if (!gone.signal.aborted) json(response, ...answer);
+    } catch (error) {
+      if (!gone.signal.aborted) throw error; // nobody to answer
+    }
+    return;
+  }
   if (url.pathname === '/api/scans') return json(response, 200, { scans: (await options.store?.list()) ?? [] });
   const stored = /^\/api\/scans\/([^/]+)$/.exec(url.pathname);
   if (stored) {
@@ -72,11 +84,15 @@ async function handle(request: IncomingMessage, response: ServerResponse, option
   response.writeHead(200, { 'content-type': page.type, 'cache-control': 'no-cache' }).end(body);
 }
 
-async function scanAnswer(input: string | null, { open, openOrganization, store }: WebOptions): Promise<[number, unknown]> {
+async function scanAnswer(
+  input: string | null,
+  { open, openOrganization, store }: WebOptions,
+  signal: AbortSignal,
+): Promise<[number, unknown]> {
   try {
     if (!input?.trim()) throw new AtlasError('Enter a GitHub URL or a directory');
     const organization = openOrganization?.(input.trim());
-    if (organization) return [200, await organizationAnswer(await organization, open, store)];
+    if (organization) return [200, await organizationAnswer(await organization, open, store, signal)];
     const { result, stored } = await scan(await open(input.trim()), store);
     return [200, answer(result, stored)];
   } catch (error) {
@@ -90,8 +106,8 @@ async function scanAnswer(input: string | null, { open, openOrganization, store 
  * it has and how many skills they hold; each repository with skills, as /api/scan answers it; the
  * warnings, each with its repository first.
  */
-async function organizationAnswer(organization: Organization, open: WebOptions['open'], store?: Store) {
-  const scans = await scanOrganization(organization, open, store);
+async function organizationAnswer(organization: Organization, open: WebOptions['open'], store: Store | undefined, signal: AbortSignal) {
+  const scans = await scanOrganization(organization, open, store, signal);
   return {
     organization: {
       id: organization.id,

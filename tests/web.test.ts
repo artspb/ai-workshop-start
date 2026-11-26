@@ -9,7 +9,7 @@ import { after, test } from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { createWebServer, listen } from '../src/web/server.ts';
 import { filterRepositories, filterSkills } from '../src/web/public/filter.js';
-import { addressRequest, historyView, storedBox } from '../src/web/public/history.js';
+import { addressRequest, historyView, storedBox, storedOnPage } from '../src/web/public/history.js';
 import { atlas, CLI, EXAMPLE_COMMIT, FIXTURE, open } from './helpers.ts';
 
 const server = createWebServer({ open });
@@ -172,6 +172,12 @@ test('the filter, an organization: every repository; one with no skill it matche
   assert.deepEqual(shown('REVIEW'), [['JetBrains/Alpha', ['review']]]);
   assert.deepEqual(shown('a version'), [['JetBrains/kotlin', ['bump']]]);
   assert.deepEqual(shown('nothing'), []);
+  // A repository's heading keeps its whole skill count, the filter showing a part of them.
+  assert.deepEqual(
+    filterRepositories(repositories, 'review').map((r) => [r.repository.id, r.skills.length, r.total]),
+    [['JetBrains/Alpha', 1, 2]],
+  );
+  assert.deepEqual(filterRepositories(repositories, '').map((r) => r.total), [2, 1]);
   // The repositories given are not changed.
   assert.equal(repositories[0].skills.length, 2);
 });
@@ -224,6 +230,10 @@ test('Scanned before: hidden while nothing is stored; a row per scan, in order; 
       current: true,
     },
   ]);
+  // The stored scan on the page: a repository's, a stored scan's; none for an organization, its repositories stored or not.
+  assert.equal(storedOnPage({ stored: 'a' }), 'a');
+  assert.equal(storedOnPage({ stored: null }), null);
+  assert.equal(storedOnPage({ organization: { id: 'JetBrains' }, repositories: [{ stored: 'a' }] } as any), null);
   // Not stored, or nothing on the page: none marked.
   for (const shown of [null, undefined, '']) assert.ok(historyView(scans, shown).rows.every((row) => !row.current), String(shown));
 });

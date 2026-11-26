@@ -1,7 +1,7 @@
 // The page: a thin client of /api/scan and /api/scans. The address holds the scan:
 // /?repo=<URL | directory | organization URL> scans, /?scan=<id> opens a stored scan.
 import { filterRepositories, filterSkills } from './filter.js';
-import { addressRequest, historyView, storedBox } from './history.js';
+import { addressRequest, historyView, storedBox, storedOnPage } from './history.js';
 
 const $ = (id) => document.getElementById(id);
 const form = $('scan');
@@ -17,6 +17,8 @@ let skills = [];
 let repositories = null;
 /** Only the latest scan is shown, whatever order the answers come in. */
 let latest = 0;
+/** Aborts the scan asked for last: the server then stops asking GitHub for it. */
+let asking = null;
 /** The stored scan on the page, if any: the one marked in Scanned before. */
 let shown = null;
 
@@ -45,6 +47,8 @@ async function scanAddress() {
   input.value = request?.repo ?? '';
   // Every address cancels the scan before it, an empty one too.
   const scan = ++latest;
+  asking?.abort();
+  asking = new AbortController();
   shown = null;
   if (!request) {
     status.hidden = result.hidden = true;
@@ -54,7 +58,7 @@ async function scanAddress() {
   result.hidden = true;
   let answer;
   try {
-    answer = await (await fetch(request.url)).json();
+    answer = await (await fetch(request.url, { signal: asking.signal })).json();
   } catch (error) {
     answer = { error: `The Skill Atlas server does not answer: ${error.message}` };
   }
@@ -64,7 +68,7 @@ async function scanAddress() {
   } else {
     status.hidden = true;
     if (request.scan) input.value = storedBox(answer.repository);
-    shown = answer.stored ?? null;
+    shown = storedOnPage(answer);
     if (answer.organization) showOrganization(answer);
     else showResult(answer);
   }
@@ -141,8 +145,7 @@ function showRest(warnings) {
 function showSkills() {
   if (repositories) {
     const shown = filterRepositories(repositories, filter.value);
-    const total = new Map(repositories.map((repository) => [repository.repository.id, repository.skills.length]));
-    $('skills').replaceChildren(...shown.map((repository) => repositoryItem(repository, total.get(repository.repository.id))));
+    $('skills').replaceChildren(...shown.map(repositoryItem));
     $('empty').hidden = shown.length > 0 || skills.length === 0;
     return;
   }
@@ -151,8 +154,8 @@ function showSkills() {
   $('empty').hidden = shown.length > 0 || skills.length === 0;
 }
 
-/** One repository of an organization: its name, skill count and commit, then the skills the filter shows. */
-function repositoryItem({ repository, skills: shown }, total) {
+/** One repository of an organization: its name, whole skill count and commit, then the skills the filter shows. */
+function repositoryItem({ repository, skills: shown, total }) {
   const heading = element(
     'h3',
     {},
