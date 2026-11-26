@@ -26,7 +26,9 @@ gh api repos/{owner}/{repo}/pulls/<n>/reviews     # earlier reviews
 gh api repos/{owner}/{repo}/pulls/<n>/comments    # earlier inline comments
 ```
 - **Nothing new, nothing posted**: this skill also runs on every submitted review, replies included.
-  No commit since your last review, and no new comment that asks you something: post nothing.
+  Your last review is the bot's latest review with a body that does not contain `<!-- address-review`:
+  a thread reply is a review with an empty body, and address-review's reviews carry that marker.
+  Its commit is the pull request's head, and no new comment asks you something: post nothing.
 - **CI is a fact, not a finding to repeat**: if a check fails, link the failing job in the summary; don't rerun what CI runs.
 - **A re-review**, after a new push: review what changed since your last review
   (`git fetch --depth 1 origin <last reviewed commit>`, then `git diff <last reviewed commit>..<head>`:
