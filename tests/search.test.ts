@@ -2,13 +2,15 @@
 // temporary directory, with GitHub never asked: the search answers from the store only.
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
+import fs from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test, type TestContext } from 'node:test';
+import { mock, test, type TestContext } from 'node:test';
 import type { ScanResult } from '../src/core/scan.ts';
 import { openStore } from '../src/store.ts';
 import { createWebServer, listen } from '../src/web/server.ts';
-import { searchView } from '../src/web/public/history.js';
+import { SEARCH_PAUSE, searchAsker, searchView } from '../src/web/public/history.js';
 
 const OLD = '1111111111111111111111111111111111111111';
 const NEW = '2222222222222222222222222222222222222222';
@@ -98,6 +100,7 @@ test('/api/search: each result its name, first sentence, repository, commit and 
         scan: scan.example,
       },
     ],
+    more: 0,
   });
   // The first sentence as scan prints it: up to its . ! or ?; none, empty.
   assert.deepEqual((await search('bump')).body.results.map((r: { sentence: string }) => r.sentence), ['Bump the Kotlin version!']);
@@ -190,8 +193,8 @@ test('/api/search: a repository scanned at several commits shows its skills once
   assert.equal(example[0].scan, scan.example);
   assert.equal(example[0].sentence, 'Write commit messages the way this repository does now.');
   // A skill only in an older scan is not found.
-  assert.deepEqual((await search('old-only')).body, { results: [] });
-  assert.deepEqual((await search('removed')).body, { results: [] });
+  assert.deepEqual((await search('old-only')).body, { results: [], more: 0 });
+  assert.deepEqual((await search('removed')).body, { results: [], more: 0 });
 });
 
 test('/api/search: from the store only, GitHub never asked; a result opens its scan as stored', async (t) => {
@@ -208,11 +211,11 @@ test('/api/search: from the store only, GitHub never asked; a result opens its s
 
 test('/api/search: no word, or no store: no results', async (t) => {
   const { search } = await serve(t);
-  for (const q of [undefined, '', '   ']) assert.deepEqual(await search(q), { status: 200, type: 'application/json; charset=utf-8', body: { results: [] } }, String(q));
+  for (const q of [undefined, '', '   ']) assert.deepEqual(await search(q), { status: 200, type: 'application/json; charset=utf-8', body: { results: [], more: 0 } }, String(q));
   const server = createWebServer({ open: () => Promise.reject(new Error('offline')) });
   const base = await listen(server, 0);
   t.after(() => server.close());
-  assert.deepEqual(await (await fetch(`${base}/api/search?q=commit`)).json(), { results: [] });
+  assert.deepEqual(await (await fetch(`${base}/api/search?q=commit`)).json(), { results: [], more: 0 });
 });
 
 test('the page: a search box in Scanned before, above its list', async (t) => {
@@ -228,8 +231,8 @@ test('the page: a search box in Scanned before, above its list', async (t) => {
 
 test('the page, a search: no word, the list; else the results in its place, each opening its scan as stored', async (t) => {
   const { search, scan } = await serve(t);
-  assert.deepEqual(searchView('  ', []), { searching: false, empty: false, rows: [] });
-  assert.deepEqual(searchView('nothing', []), { searching: true, empty: true, rows: [] });
+  assert.deepEqual(searchView('  ', []), { searching: false, empty: false, rows: [], more: '' });
+  assert.deepEqual(searchView('nothing', []), { searching: true, empty: true, rows: [], more: '' });
   const view = searchView('review', (await search('review')).body.results);
   assert.deepEqual(view, {
     searching: true,
@@ -247,5 +250,133 @@ test('the page, a search: no word, the list; else the results in its place, each
         refs: 'main (default branch), v2.0',
       },
     ],
+    more: '',
   });
+});
+
+/** A store of `count` repositories, each with one skill matching "skill", and a server over it. */
+async function serveMany(t: TestContext, count: number) {
+  const directory = mkdtempSync(join(tmpdir(), 'skill-atlas-search-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const store = openStore(directory);
+  // Stored in reverse, so the order found is the sort's, not the store's.
+  for (let i = count - 1; i >= 0; i--) {
+    const id = `JetBrains/repo-${String(i).padStart(3, '0')}`;
+    await store.set(`${id}@${NEW}`, { ref: 'main (default branch)', result: result(id, NEW, [[`skill-${String(i).padStart(3, '0')}`, 'A skill.']]) });
+  }
+  const server = createWebServer({ open: () => Promise.reject(new Error('offline')), store });
+  const base = await listen(server, 0);
+  t.after(() => server.close());
+  const search = async (q: string) => (await (await fetch(`${base}/api/search?q=${encodeURIComponent(q)}`)).json()) as { results: { name: string }[]; more: number };
+  return { directory, search };
+}
+
+test('/api/search: the first 50 results, in order, and how many more match', async (t) => {
+  const { search } = await serveMany(t, 60);
+  const { results, more } = await search('skill');
+  assert.equal(results.length, 50);
+  assert.deepEqual(
+    results.map((r) => r.name),
+    Array.from({ length: 50 }, (_, i) => `skill-${String(i).padStart(3, '0')}`),
+  );
+  assert.equal(more, 10);
+  // Fewer matches than the cap: all of them, none more.
+  const one = await search('skill-059');
+  assert.deepEqual([one.results.map((r) => r.name), one.more], [['skill-059'], 0]);
+});
+
+test('/api/search: exactly 50 matches, all of them, none more', async (t) => {
+  const { search } = await serveMany(t, 50);
+  const { results, more } = await search('skill');
+  assert.deepEqual([results.length, more], [50, 0]);
+});
+
+test('/api/search: each stored file read once a search', async (t) => {
+  const { directory, search } = await serveMany(t, 5);
+  const reads: string[] = [];
+  const readFile = fs.readFile;
+  mock.method(fs, 'readFile', function (this: unknown, ...args: Parameters<typeof fs.readFile>) {
+    if (String(args[0]).startsWith(directory)) reads.push(String(args[0]));
+    return readFile.apply(this, args);
+  });
+  syncBuiltinESMExports();
+  t.after(() => {
+    mock.restoreAll();
+    syncBuiltinESMExports();
+  });
+  assert.equal((await search('skill')).results.length, 5);
+  assert.equal(reads.length, 5, reads.join('\n'));
+  assert.equal(new Set(reads).size, 5);
+});
+
+test('the page, more than 50 results: and <M> more, after them', async (t) => {
+  const { search } = await serveMany(t, 60);
+  const { results, more } = await search('skill');
+  const view = searchView('skill', results as any, more);
+  assert.equal(view.rows.length, 50);
+  assert.equal(view.more, 'and 10 more');
+  assert.equal(searchView('skill', results.slice(0, 3) as any, 0).more, '');
+  const { base } = await serve(t);
+  const html = await (await fetch(`${base}/`)).text();
+  const found = html.indexOf('<ul id="found" hidden>');
+  assert.ok(found > 0 && found < html.indexOf('<p id="more" hidden>'), 'and <M> more, after the results');
+});
+
+test('the page: searched once the typing pauses, 250 ms, one request; an older answer not shown; emptied, the list at once', async (t) => {
+  const { base } = await serve(t);
+  assert.equal(SEARCH_PAUSE, 250);
+  mock.timers.enable({ apis: ['setTimeout'] });
+  t.after(() => mock.timers.reset());
+  const asked: string[] = [];
+  const shown: [string, string[], number][] = [];
+  let answered = () => {};
+  const ask = async (query: string) => {
+    asked.push(query);
+    const body = (await (await fetch(`${base}/api/search?q=${encodeURIComponent(query)}`)).json()) as { results: { name: string }[]; more: number };
+    answered();
+    return body;
+  };
+  const answer = () => new Promise<void>((resolve) => (answered = () => setImmediate(resolve)));
+  const searchFor = searchAsker(ask, (query, { results, more }) => shown.push([query, results.map((r: { name: string }) => r.name), more]));
+
+  // Typed a letter at a time: nothing asked until 250 ms after the last one.
+  for (const query of ['r', 're', 'rev']) {
+    searchFor(query);
+    mock.timers.tick(SEARCH_PAUSE - 1);
+  }
+  assert.deepEqual(asked, []);
+  let done = answer();
+  mock.timers.tick(1);
+  await done;
+  assert.deepEqual(asked, ['rev']);
+  assert.deepEqual(shown, [['rev', ['review'], 0]]);
+
+  // An answer to an older word, come after the next word was typed: not shown.
+  shown.length = 0;
+  done = answer();
+  searchFor('bump');
+  mock.timers.tick(SEARCH_PAUSE);
+  searchFor('commit');
+  await done;
+  assert.deepEqual(shown, []);
+  done = answer();
+  mock.timers.tick(SEARCH_PAUSE);
+  await done;
+  assert.deepEqual(shown, [['commit', ['commits', 'commits'], 0]]);
+
+  // Emptied: the list at once, nothing asked, and a word pending is not asked either.
+  shown.length = 0;
+  asked.length = 0;
+  searchFor('review');
+  searchFor('  ');
+  assert.deepEqual(shown, [['  ', [], 0]]);
+  mock.timers.tick(SEARCH_PAUSE * 2);
+  assert.deepEqual(asked, []);
+
+  // Asked without a pause, after a scan: at the next tick.
+  done = answer();
+  searchFor('bump', 0);
+  mock.timers.tick(0);
+  await done;
+  assert.deepEqual(asked, ['bump']);
 });

@@ -708,3 +708,17 @@ test('/api/scan, not stored: stored is null; /api/scans without a store: none', 
   assert.deepEqual(await (await fetch(`${base}/api/scans`)).json(), { scans: [] });
   assert.equal((await fetch(`${base}/api/scans/${'0'.repeat(64)}`)).status, 404);
 });
+
+test('listResults: every stored scan as list has it, the latest first, with its result as open reads it', async (t) => {
+  const directory = storeDirectory(t);
+  let clock = Date.parse('2026-11-26T10:00:00Z');
+  const store = openStore(directory, () => new Date((clock += 60_000)));
+  // The default branch at one commit, then at the next.
+  const open = (head: string) => openGitHub('github.com/JetBrains/example', { fetch: replay(github(head)) });
+  await scan(await open(MAIN), store);
+  await scan(await open(NEXT), store);
+  const scans = await store.listResults();
+  assert.deepEqual(scans.map(({ result, ...scan }) => scan), await store.list());
+  assert.deepEqual(scans.map((scan) => scan.repository.commit), [NEXT, MAIN]);
+  for (const { id, result } of scans) assert.deepEqual(result, await store.open(id));
+});

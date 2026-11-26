@@ -70,14 +70,46 @@ export function historyView(scans, shown, time = (iso) => new Date(iso).toLocale
   };
 }
 
+/** How long the typing pauses before the search asks the server, in ms. */
+export const SEARCH_PAUSE = 250;
+
+/**
+ * The search, asked once the typing pauses: each word typed puts off the one before, so only the last
+ * is asked, `pause` ms after it; an answer to an older word is not shown. No word: shown at once, none asked.
+ * @template A
+ * @param {(query: string) => Promise<A>} ask
+ * @param {(query: string, answer: A | { results: [], more: 0 }) => void} show
+ * @returns {(query: string, wait?: number) => void} a word typed; `wait` 0 to ask at once, after a scan
+ */
+export function searchAsker(ask, show, pause = SEARCH_PAUSE) {
+  let timer;
+  let asked = 0;
+  return (query, wait = pause) => {
+    clearTimeout(timer);
+    const turn = ++asked;
+    if (!query.trim()) return show(query, { results: [], more: 0 });
+    timer = setTimeout(async () => {
+      let answer;
+      try {
+        answer = await ask(query);
+      } catch {
+        return;
+      }
+      if (turn === asked) show(query, answer);
+    }, wait);
+  };
+}
+
 /**
  * The search across stored scans, for a query and /api/search's results: no word, no search, the
- * list shows; else a row per result, in the server's order, its repository opening its scan as stored.
+ * list shows; else a row per result, in the server's order, its repository opening its scan as stored,
+ * then `and <M> more` for the ones not answered.
  * @param {string} query
  * @param {{ name: string, sentence: string, link: string, repository: { id: string, commit: string }, refs: string[], scan: string }[]} results
+ * @param {number} [more] how many more match
  */
-export function searchView(query, results) {
-  if (!query.trim()) return { searching: false, empty: false, rows: [] };
+export function searchView(query, results, more = 0) {
+  if (!query.trim()) return { searching: false, empty: false, rows: [], more: '' };
   return {
     searching: true,
     empty: results.length === 0,
@@ -92,5 +124,6 @@ export function searchView(query, results) {
       short: result.repository.commit.slice(0, 12),
       refs: result.refs.join(', '),
     })),
+    more: more > 0 ? `and ${more} more` : '',
   };
 }

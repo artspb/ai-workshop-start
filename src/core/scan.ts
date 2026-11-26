@@ -58,6 +58,8 @@ export type Store = {
   id(key: string): string;
   /** Every stored scan, the latest first. */
   list(): Promise<StoredScan[]>;
+  /** Every stored scan with its result, the latest first: each read once, as `list` reads them. */
+  listResults(): Promise<(StoredScan & { result: ScanResult })[]>;
   /** A stored scan's result by its id, or undefined. */
   open(id: string): Promise<ScanResult | undefined>;
 };

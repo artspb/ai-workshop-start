@@ -1,7 +1,7 @@
 // The page: a thin client of /api/scan and /api/scans. The address holds the scan:
 // /?repo=<URL | directory | organization URL> scans, /?scan=<id> opens a stored scan.
 import { filterRepositories, filterSkills } from './filter.js';
-import { addressRequest, historyView, scanSignals, searchView, storedBox, storedOnPage } from './history.js';
+import { addressRequest, historyView, scanSignals, searchAsker, searchView, storedBox, storedOnPage } from './history.js';
 import { errorText, progressText, progressUrl, readAnswer, stoppedText } from './progress.js';
 
 const $ = (id) => document.getElementById(id);
@@ -27,8 +27,8 @@ const nextScan = scanSignals();
 let shown = null;
 /** The scan running, for Stop: what it scans and how far it got; null when none runs. */
 let running = null;
-/** Only the latest search is shown, whatever order the answers come in. */
-let searched = 0;
+/** The search, asked once the typing pauses; only the latest word's answer is shown. */
+const searchFor = searchAsker(async (query) => (await fetch(`/api/search?q=${encodeURIComponent(query)}`)).json(), showSearch);
 
 form.addEventListener('submit', (event) => {
   event.preventDefault();
@@ -39,7 +39,7 @@ form.addEventListener('submit', (event) => {
 });
 window.addEventListener('popstate', scanAddress);
 filter.addEventListener('input', showSkills);
-search.addEventListener('input', showSearch);
+search.addEventListener('input', () => searchFor(search.value));
 // Stop: the scan is aborted, as on another scan, so the server stops asking GitHub for it; the address stays.
 stop.addEventListener('click', () => {
   if (!running) return;
@@ -121,24 +121,13 @@ async function showHistory() {
     }),
   );
   earlier.hidden = view.hidden;
-  // A new scan may be stored now: searched again.
-  showSearch();
+  // A new scan may be stored now: searched again, without waiting for a pause.
+  searchFor(search.value, 0);
 }
 
 /** The search across stored scans, from the store only: while it has a word, its results in place of the list. */
-async function showSearch() {
-  const query = search.value;
-  const asked = ++searched;
-  let results = [];
-  if (query.trim()) {
-    try {
-      ({ results } = await (await fetch(`/api/search?q=${encodeURIComponent(query)}`)).json());
-    } catch {
-      return;
-    }
-  }
-  if (asked !== searched) return;
-  const view = searchView(query, results);
+function showSearch(query, { results, more }) {
+  const view = searchView(query, results, more);
   $('found').replaceChildren(
     ...view.rows.map((row) => {
       const scan = element('a', { href: row.href }, row.repository);
@@ -154,6 +143,8 @@ async function showSearch() {
   );
   $('found').hidden = !view.searching || view.empty;
   $('none').hidden = !view.empty;
+  $('more').textContent = view.more;
+  $('more').hidden = !view.more;
   $('scans').hidden = view.searching;
 }
 
