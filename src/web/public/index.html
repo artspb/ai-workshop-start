@@ -20,8 +20,6 @@
       </form>
     </header>
     <main>
-      <p id="status" role="status" hidden></p>
-      <progress id="progress" hidden></progress>
       <details id="history" open hidden>
         <summary><h2>Scanned before</h2></summary>
         <input id="search" type="search" autocomplete="off" placeholder="Search every stored scan by name, description or repository" aria-label="Search every stored scan" />
@@ -30,6 +28,8 @@
         <p id="more" hidden></p>
         <ul id="scans"></ul>
       </details>
+      <p id="status" role="status" hidden></p>
+      <progress id="progress" hidden></progress>
       <section id="result" hidden>
         <div class="summary">
           <h2><a id="repository"></a> · <span id="count"></span></h2>
