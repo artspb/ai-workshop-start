@@ -16,6 +16,10 @@ The web view's visual tests ([spec](spec/web.md#visual-tests)) compare the page 
   every screenshot). Commit only the changed screenshots, as a commit of their own: `Accept new screenshots: <why>`.
 - **A change not meant to change the page** that fails them: a regression, fixed in the code, never accepted.
 - **A reviewer** opens each changed screenshot, before and after: it shows the change the issue asked for, and nothing else.
+## Environment
+[.air/cloud/startup.sh](.air/cloud/startup.sh): Air runs it before an agent's first command. It provides `jq` and `gh`, Node >= 24,
+`node_modules` (`npm ci`), and Playwright 1.65.1's Chromium with its system libraries. It ends with a healthcheck.
+A skill doesn't install these again, but keeps a one-line fallback for where the script did not run: [tests/startup.test.ts](tests/startup.test.ts).
 ## Definition of done
 - All tests pass locally: `npm test` and `npm run e2e`
 - The CI build ([.github/workflows/ci.yml](.github/workflows/ci.yml)) is green

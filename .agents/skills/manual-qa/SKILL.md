@@ -19,9 +19,11 @@ a step it is in fails, and you say so.
 git fetch origin main && git switch --detach origin/main && npm ci
 SHA=$(git rev-parse HEAD) && SHORT=$(git rev-parse --short=7 HEAD)
 D=/tmp/manual-qa && rm -rf "$D" && mkdir -p "$D" && (cd "$D" && npm init -y >/dev/null \
-  && npm i -s playwright@1.65.1 @playwright/test@1.65.1 ffmpeg-static@5.2.0 && npx playwright install --with-deps chromium)
+  && npm i -s playwright@1.65.1 @playwright/test@1.65.1 ffmpeg-static@5.2.0)
+(cd "$D" && test -x "$(node -p "require('playwright').chromium.executablePath()")" || npx playwright install --with-deps chromium)
 ```
 Playwright and ffmpeg in the temporary folder, never as dependencies of the repository.
+Chromium and its system libraries come with the environment (`.air/cloud/startup.sh`); the last line installs them only where it did not run.
 `GITHUB_TOKEN` must be set for the GitHub scripts; if it is not, `export GITHUB_TOKEN="$(gh auth token)"`.
 Never print it, never pass it to the browser.
 
