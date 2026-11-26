@@ -84,7 +84,9 @@ gh api repos/{owner}/{repo}/pulls/<n>/reviews --method POST --input review.json
   - `Line could not be resolved`: a comment is on a line outside the diff, and the error does not say which.
     Check each comment's line against `gh pr diff <n>` and move those outside it into the summary, as `path:line`.
   - `User can only have one pending review per pull request`: an address-review round of the same bot is in flight.
-    Wait a minute and post again, up to three times; then leave it: its next run submits the stranded review.
+    Wait a minute and post again, up to three times. Then nothing starts address-review again (it runs on a submitted
+    review), so say so in a pull request comment, which is not a review: `gh pr comment <n> --body 'No review of <headRefOid>:
+    a pending review of this bot blocks it; submit or delete it, then ask for a review again.'`
 - `line` is the line in the new file; a range adds `start_line`.
 
 ## Example
