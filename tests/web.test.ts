@@ -30,12 +30,13 @@ test('the page: a box, Scan, a filter, the warnings and the scans before, as HTM
   assert.equal(page.status, 200);
   assert.equal(page.headers.get('content-type'), 'text/html; charset=utf-8');
   const html = await page.text();
-  for (const part of ['<form id="scan">', 'id="repo"', '>Scan</button>', 'id="filter"', 'id="warnings"', 'id="history"', 'Scanned before', 'src="/app.js"'])
+  for (const part of ['<form id="scan">', 'id="repo"', '>Scan</button>', '<button id="stop" type="button" hidden>Stop</button>', '<progress id="progress" hidden>', 'id="filter"', 'id="warnings"', 'id="history"', 'Scanned before', 'src="/app.js"'])
     assert.ok(html.includes(part), part);
   for (const [path, type] of [
     ['/app.js', 'text/javascript; charset=utf-8'],
     ['/filter.js', 'text/javascript; charset=utf-8'],
     ['/history.js', 'text/javascript; charset=utf-8'],
+    ['/progress.js', 'text/javascript; charset=utf-8'],
     ['/style.css', 'text/css; charset=utf-8'],
   ]) {
     const response = await fetch(`${base}${path}`);

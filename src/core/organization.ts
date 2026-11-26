@@ -24,12 +24,15 @@ const AT_A_TIME = 8;
  * own, stored as one. A repository that cannot be scanned is skipped with its error; when GitHub
  * answers no more, the whole scan fails. Once `signal` aborts (nobody waits for the answer any more),
  * no repository is started, and the scan fails with the signal's reason when the ones started end.
+ * `progress` hears how many repositories are scanned of how many: 0 first, then as each one ends,
+ * scanned or skipped.
  */
 export async function scanOrganization(
   organization: Organization,
   open: (input: string) => Promise<Source>,
   store?: Store,
   signal?: AbortSignal,
+  progress?: (scanned: number, repositories: number) => void,
 ): Promise<RepositoryScan[]> {
   const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
   const repositories = [...organization.repositories].sort(
@@ -38,6 +41,8 @@ export async function scanOrganization(
   const scans: RepositoryScan[] = new Array(repositories.length);
   let next = 0;
   let stopped = false;
+  let scanned = 0;
+  progress?.(0, repositories.length);
   async function worker() {
     while (!stopped && !signal?.aborted && next < repositories.length) {
       const index = next++;
@@ -51,6 +56,7 @@ export async function scanOrganization(
         }
         scans[index] = { id, error: error.message };
       }
+      if (!stopped) progress?.(++scanned, repositories.length);
     }
   }
   await Promise.all(Array.from({ length: Math.min(AT_A_TIME, repositories.length) }, worker));

@@ -10,7 +10,8 @@ import { openGitHub, openGitHubOwner, parseGitHubOwner, parseGitHubUrl, type Fet
 import { replay, type Recording } from '../src/core/replay.ts';
 import { openStore } from '../src/store.ts';
 import { filterRepositories } from '../src/web/public/filter.js';
-import { historyView, scanSignals, storedOnPage } from '../src/web/public/history.js';
+import { addressRequest, historyView, scanSignals, storedOnPage } from '../src/web/public/history.js';
+import { progressText, progressUrl, readAnswer, stoppedText } from '../src/web/public/progress.js';
 import { createWebServer, listen } from '../src/web/server.ts';
 
 const API = 'https://api.github.com';
@@ -315,10 +316,23 @@ async function serve(t: { after(fn: () => unknown): void }, { github = recording
   });
   const base = await listen(server, 0);
   t.after(() => server.close());
-  return async (repo: string) => {
-    const response = await globalThis.fetch(`${base}/api/scan?repo=${encodeURIComponent(repo)}`);
-    return { status: response.status, body: (await response.json()) as any };
-  };
+  return Object.assign(
+    async (repo: string) => {
+      const response = await globalThis.fetch(`${base}/api/scan?repo=${encodeURIComponent(repo)}`);
+      return { status: response.status, body: (await response.json()) as any };
+    },
+    {
+      /** /api/scan with `&progress`: its status, content type and every line of its body. */
+      async progress(repo: string) {
+        const response = await globalThis.fetch(`${base}/api/scan?repo=${encodeURIComponent(repo)}&progress`);
+        const text = await response.text();
+        const type = response.headers.get('content-type');
+        const lines = type?.startsWith('application/x-ndjson') ? text.trimEnd().split('\n').map((line) => JSON.parse(line)) : [JSON.parse(text)];
+        return { status: response.status, type, lines };
+      },
+      base,
+    },
+  );
 }
 
 test('the web view, an organization: the counts, each repository with skills as /api/scan answers it, sorted; the warnings with their repository', async (t) => {
@@ -464,4 +478,131 @@ test('the web view, an organization the page left: the repositories not started 
   // At most the 8 repositories being scanned at the abort, whose scans end; none started after.
   assert.ok(started() <= atAbort + 8, `started at the abort: ${atAbort}, later: ${started()}`);
   assert.ok(started() < 100, `started: ${started()}`);
+});
+
+test('the web view, an organization with &progress: NDJSON, the repositories scanned of how many, then the answer as without it', async (t) => {
+  const get = await serve(t);
+  const { status, type, lines } = await get.progress('github.com/JetBrains');
+  assert.equal(status, 200);
+  assert.equal(type, 'application/x-ndjson; charset=utf-8');
+  // 0 first, then one more as each repository ends, scanned or skipped (the empty one too).
+  assert.deepEqual(
+    lines.slice(0, -1),
+    Array.from({ length: 102 }, (_, scanned) => ({ progress: { scanned, repositories: 101 } })),
+  );
+  assert.deepEqual(lines.at(-1), (await get('github.com/JetBrains')).body);
+  // A user too; an owner with no repository: only 0 of 0.
+  const user = await get.progress('github.com/artspb');
+  assert.deepEqual(user.lines.slice(0, -1), [{ progress: { scanned: 0, repositories: 1 } }, { progress: { scanned: 1, repositories: 1 } }]);
+  const none = await (
+    await serve(t, { github: recording({ [`${API}/users/artspb/repos?type=owner&per_page=100&page=1`]: { status: 200, body: [] } }) })
+  ).progress('github.com/artspb');
+  assert.deepEqual(none.lines, [
+    { progress: { scanned: 0, repositories: 0 } },
+    { organization: { id: 'artspb', url: 'https://github.com/artspb', repositories: 0, skills: 0 }, repositories: [], warnings: [] },
+  ]);
+});
+
+test('the web view, &progress: no such owner, a repository → JSON, as without it; a scan failing on the way → its last line { error }', async (t) => {
+  const get = await serve(t);
+  assert.deepEqual(await get.progress('github.com/nobody'), {
+    status: 400,
+    type: 'application/json; charset=utf-8',
+    lines: [{ error: 'Organization or user not found: https://github.com/nobody' }],
+  });
+  const repository = await get.progress('github.com/JetBrains/zeta/tree/main');
+  assert.equal(repository.status, 200);
+  assert.equal(repository.type, 'application/json; charset=utf-8');
+  assert.deepEqual(repository.lines, [(await get('github.com/JetBrains/zeta/tree/main')).body]);
+  const limited = { status: 403, body: { message: 'API rate limit exceeded for user ID 1.' } };
+  const failed = await (await serve(t, { github: recording({ [`${API}/repos/JetBrains/repo-50`]: limited }) })).progress('github.com/JetBrains');
+  assert.equal(failed.status, 200);
+  assert.equal(failed.type, 'application/x-ndjson; charset=utf-8');
+  assert.deepEqual(failed.lines[0], { progress: { scanned: 0, repositories: 101 } });
+  assert.ok(failed.lines.slice(0, -1).every((line: any) => line.progress && line.progress.scanned < 101));
+  assert.deepEqual(failed.lines.at(-1), { error: 'GitHub rate limit reached; try again in a minute' });
+});
+
+test('the page reads the progress, then the answer; a repository and a stored scan as JSON', async (t) => {
+  const get = await serve(t);
+  // The page asks with &progress for a scan, not for a stored scan.
+  const request = addressRequest('?repo=github.com/JetBrains')!;
+  assert.equal(progressUrl(request), '/api/scan?repo=github.com%2FJetBrains&progress');
+  assert.equal(progressUrl(addressRequest('?scan=abc')!), '/api/scans/abc');
+  const seen: unknown[] = [];
+  const answer = await readAnswer(await globalThis.fetch(`${get.base}${progressUrl(request)}`), (progress) => seen.push(progress));
+  assert.deepEqual(answer, (await get('github.com/JetBrains')).body);
+  assert.equal(seen.length, 102);
+  assert.deepEqual(seen.at(-1), { scanned: 101, repositories: 101 });
+  const zeta = addressRequest('?repo=github.com/JetBrains/zeta')!;
+  const one: any = await readAnswer(await globalThis.fetch(`${get.base}${progressUrl(zeta)}`), () => assert.fail('no progress for a repository'));
+  assert.equal(one.repository.id, 'JetBrains/zeta');
+  const failed = await readAnswer(
+    await globalThis.fetch(`${(await serve(t, { github: recording({ [`${API}/repos/JetBrains/Alpha`]: { status: 401, body: {} } }) })).base}${progressUrl(request)}`),
+  );
+  assert.deepEqual(failed, { error: 'GitHub rejected the token in GITHUB_TOKEN' });
+});
+
+test('the page while a scan runs and once stopped: what it scans, how many repositories of how many', () => {
+  assert.equal(progressText('github.com/JetBrains/kotlin'), 'Scanning github.com/JetBrains/kotlin…');
+  assert.equal(progressText('github.com/JetBrains', { scanned: 37, repositories: 120 }), 'Scanning github.com/JetBrains… 37 of 120 repositories');
+  assert.equal(progressText('github.com/artspb', { scanned: 0, repositories: 1 }), 'Scanning github.com/artspb… 0 of 1 repository');
+  assert.equal(stoppedText('github.com/JetBrains/kotlin', null), 'Stopped scanning github.com/JetBrains/kotlin');
+  assert.equal(
+    stoppedText('github.com/JetBrains', { scanned: 37, repositories: 120 }),
+    'Stopped scanning github.com/JetBrains at 37 of 120 repositories; the ones scanned are in Scanned before',
+  );
+});
+
+test('the web view, Stop on an organization with &progress: no repository not started yet is asked for; the ones scanned are stored', async (t) => {
+  // 100 repositories without skills, GitHub answering in 20 ms each.
+  const names = Array.from({ length: 100 }, (_, index) => ({ name: `slow-${String(index).padStart(3, '0')}` }));
+  const answers = replay({
+    [`${API}/users/Slow`]: { status: 200, body: { login: 'Slow', type: 'Organization' } },
+    [`${API}/orgs/Slow/repos?type=all&per_page=100&page=1`]: {
+      status: 200,
+      body: names.map(({ name }) => ({ full_name: `Slow/${name}`, default_branch: 'main' })),
+    },
+    [`${API}/orgs/Slow/repos?type=all&per_page=100&page=2`]: { status: 200, body: [] },
+    ...Object.assign({}, ...names.map((fake) => repository('Slow', fake))),
+  });
+  const asked: string[] = [];
+  const fetch: Fetch = async (url, init) => {
+    asked.push(url);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return answers(url, init);
+  };
+  const directory = mkdtempSync(join(tmpdir(), 'skill-atlas-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const store = openStore(directory);
+  const server = createWebServer({
+    open: (input) => openGitHub(input, { fetch, token: 'test' }),
+    openOrganization: (input) => (parseGitHubOwner(input) ? openGitHubOwner(input, { fetch, token: 'test' }) : undefined),
+    store,
+  });
+  const base = await listen(server, 0);
+  t.after(() => server.close());
+  const started = () => new Set(asked.filter((url) => /\/repos\/Slow\/[^/]+$/.test(url))).size;
+  // Stop aborts the scan as the page does another scan: by asking for the next one's signal.
+  const nextScan = scanSignals();
+  const seen: { scanned: number; repositories: number }[] = [];
+  const page = globalThis
+    .fetch(`${base}${progressUrl(addressRequest('?repo=github.com/Slow')!)}`, { signal: nextScan() })
+    .then((response) => readAnswer(response, (progress) => seen.push(progress)));
+  const deadline = Date.now() + 5000;
+  while (!seen.some(({ scanned }) => scanned >= 10)) {
+    assert.ok(Date.now() < deadline, `progress seen: ${JSON.stringify(seen.at(-1))}`);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  nextScan();
+  await assert.rejects(page, { name: 'AbortError' });
+  const atStop = started();
+  assert.ok(atStop < 100, `started at the stop: ${atStop}`);
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  // At most the 8 repositories being scanned at the stop, whose scans end; none started after.
+  assert.ok(started() <= atStop + 8, `started at the stop: ${atStop}, later: ${started()}`);
+  assert.ok(started() < 100, `started: ${started()}`);
+  // Every repository scanned before the stop is a stored scan of its own, in Scanned before.
+  const scanned = seen.at(-1)!.scanned;
+  assert.ok((await store.list()).length >= scanned, `stored: ${(await store.list()).length}, scanned: ${scanned}`);
 });
