@@ -1,6 +1,6 @@
 ---
 name: merge-when-reviewed
-description: Merge an Air bot's pull request in this repository with rebase once its review is completed - Code Review's latest comment says nothing blocks and has no findings, and every earlier thread is fixed. Use when a review is submitted, or when asked to merge a reviewed PR.
+description: Merge an Air bot's pull request in this repository with rebase once its review is completed - Code Review's latest comment says nothing blocks and has no findings, and every thread is resolved. Use when a review is submitted, or when asked to merge a reviewed PR.
 ---
 
 # Merge when reviewed
@@ -43,10 +43,10 @@ Merge only when **every** check holds; at the first that fails, post nothing and
    - its summary starts with `Nothing blocks`, code-review's verdict when nothing does;
    - it has **no findings**: `comments.totalCount` is 0, and the summary names none, no `path:line`,
      no `**blocking**`, `**suggestion**` or `**question**`, no gap or risk it asks to change.
-3. **Every thread**, resolved or not: its last comment is the bot's address-review reply that starts with `Fixed in`
-   (with the marker line), and nobody commented after it. A thread ending in **Not changed**, an answer to a question,
-   or a reviewer's follow-up is not completed. address-review starts every reply that comes with a commit with
-   `Fixed in <sha>`, a question's answer too, so a reply that does not is left for a person on purpose.
+3. **Every thread is resolved** (`isResolved`), whatever its last comment. Resolved is the one signal that a thread
+   is settled: Code Review resolves the threads it is satisfied with (a fix, a **Not changed** it agrees with,
+   a follow-up issue), and a person's resolve counts the same, as "fine as is". address-review never resolves one,
+   so an open thread, even one ending in **Fixed in**, is not settled yet.
 4. **No person** commented: every comment and review on the pull request is the bot's (login and `Bot`).
 5. **Nothing in flight**: no review in state `PENDING`.
 6. **Green and clean**: the head's `statusCheckRollup.state` is `SUCCESS` and `mergeStateStatus` is `CLEAN`.
@@ -74,7 +74,7 @@ jq --arg m "$M" 'def ar: gsub("(?m)^ {0,3}(`{3,}|~{3,})[^\\n]*\\n[\\s\\S]*?(^ {0
       on_head:   ($cr.commit.oid == $p.headRefOid),
       nothing:   (($cr.body // "") | startswith("Nothing blocks")),
       no_inline: ($cr.comments.totalCount == 0),
-      all_fixed: ([$p.reviewThreads.nodes[] | .comments.nodes[-1] | bot and (.body | ar) and (.body | startswith("Fixed in"))] | all),
+      resolved:  ([$p.reviewThreads.nodes[] | .isResolved] | all),
       bot_only:  ([$p.comments.nodes[], $p.reviews.nodes[] | bot] | all),
       no_pending: ([$p.reviews.nodes[] | .state != "PENDING"] | all),
       green:     ($p.commits.nodes[0].commit.statusCheckRollup.state == "SUCCESS" and $p.mergeStateStatus == "CLEAN"),
@@ -97,6 +97,6 @@ Still `OPEN` (refused, or a conflict): post nothing; the next review starts this
 
 Then one comment, so the merge explains itself:
 ```sh
-gh pr comment <n> --body 'Merged with rebase: Code Review <link to its latest review> found nothing on <short sha>, and every earlier thread was fixed.'
+gh pr comment <n> --body 'Merged with rebase: Code Review <link to its latest review> found nothing on <short sha>, and every thread was resolved.'
 ```
 Never merge with `--admin`, never another method, never a pull request that is not the bot's.
