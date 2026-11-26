@@ -21,11 +21,14 @@ a regular file named exactly `SKILL.md` at **`<root>/<name>/SKILL.md`**.
   Its path is the first by path; the others are its copies, and share its warnings.
   The same `<name>` with different bytes: *two skills*.
 ## Persistence
-A GitHub scan is **stored**; the same repository at the same commit is not scanned again.
-- The key: the repository, the **resolved commit**, and how it was listed (code search, its tree); a branch that moved is a new commit, a new scan
+A GitHub scan listed through its **tree** is **stored**; the same repository at the same commit is not scanned again.
+- The key: the repository, the **resolved commit**, and whether it was the default branch (its warning is worded for that); a branch that moved is a new commit, a new scan
+- A **code search** scan (`GITHUB_TOKEN`, the default branch) is never stored: the index follows the default branch late,
+  and may not have every skill of the commit yet; the next scan may find more
+- Each stored scan records what was asked for: `<branch> (default branch)`, or the `<ref>` of `/tree/<ref>`
 - Resolving the ref still asks GitHub; listing and reading the files does not
 - Stored: the whole result, warnings included; a failed scan is not stored
-- A local directory is never stored: its files change without a commit
+- A local directory is never stored: its files change without a commit; a scan not stored is scanned every time
 - Each stored scan records **when** it was scanned; nothing removes it
 - On disk, one file per scan: `SKILL_ATLAS_CACHE`, else `$XDG_CACHE_HOME/skill-atlas`, else `~/.cache/skill-atlas`; shared by `scan` and `serve`
 - The store never fails a scan: an unreadable or corrupt file → scanned again; an unwritable directory → not stored

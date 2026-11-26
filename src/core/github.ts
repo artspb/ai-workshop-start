@@ -52,9 +52,10 @@ export async function openGitHub(input: string, options: GitHubOptions): Promise
       return { paths, warnings };
     },
     read: (path) => github.raw(`${RAW}/${id}/${sha}/${encodePath(path)}`),
-    // The commit cannot change; the listing can find more or less, and words its warning per input.
-    key: JSON.stringify(['github', id, sha, search ? 'search' : name.ref ? 'tree' : 'tree of the default branch']),
-    listing: search ? 'code search' : 'tree',
+    // A tree is fixed by its commit: stored, by the commit and how the warning is worded for the
+    // input. Code search is not: its index follows the default branch late, so it is never stored.
+    key: search ? undefined : JSON.stringify(['github', id, sha, name.ref ? 'tree' : 'tree of the default branch']),
+    ref: name.ref ?? `${info.default_branch} (default branch)`,
   };
 }
 

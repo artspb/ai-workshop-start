@@ -17,8 +17,8 @@ export type Source = {
    * A source with a key is scanned once per store; without one, every time.
    */
   key?: string;
-  /** How the files are listed, for people: `code search`, `tree`. */
-  listing?: string;
+  /** What was asked for, for people: `main (default branch)`, or the ref of `/tree/<ref>`. */
+  ref?: string;
 };
 
 export type ScanResult = { repository: Repository; skills: Skill[]; warnings: string[] };
@@ -28,7 +28,8 @@ export type StoredScan = {
   /** Opens the stored result with `Store.open`. */
   id: string;
   repository: Repository;
-  listing: string;
+  /** What was asked for: `main (default branch)`, or the ref of `/tree/<ref>`. */
+  ref: string;
   skills: number;
   warnings: number;
   /** When it was scanned, an ISO 8601 time. */
@@ -38,7 +39,9 @@ export type StoredScan = {
 /** Where results are kept between scans, by the source's key. */
 export type Store = {
   get(key: string): Promise<ScanResult | undefined>;
-  set(key: string, scan: { listing: string; result: ScanResult }): Promise<void>;
+  set(key: string, scan: { ref: string; result: ScanResult }): Promise<void>;
+  /** The id a key's scan is stored under, as `list` and `open` know it. */
+  id(key: string): string;
   /** Every stored scan, the latest first. */
   list(): Promise<StoredScan[]>;
   /** A stored scan's result by its id, or undefined. */
@@ -54,7 +57,7 @@ export async function scan(source: Source, store?: Store): Promise<ScanResult> {
   const stored = await store.get(source.key);
   if (stored) return stored;
   const result = await scanFiles(source);
-  await store.set(source.key, { listing: source.listing ?? '', result });
+  await store.set(source.key, { ref: source.ref ?? '', result });
   return result;
 }
 
