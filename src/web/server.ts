@@ -156,7 +156,7 @@ function answer({ repository, skills, warnings }: ScanResult, stored: string | n
 }
 
 /**
- * The skills of every stored scan that match the words, as the page's filter matches them: each
+ * The skills of every stored scan that match the words, in the name, description or repository: each
  * repository once, from its latest stored scan. From the store only: GitHub is not asked.
  */
 async function search(query: string, store: Store | undefined) {
@@ -169,7 +169,7 @@ async function search(query: string, store: Store | undefined) {
     const result = await store.open(id);
     if (!result) continue;
     const { repository } = result;
-    for (const skill of filterSkills(result.skills, query))
+    for (const skill of filterSkills(result.skills, query, repository.id))
       results.push({ id: skill.id, name: skill.name, sentence: firstSentence(skill.description), link: skillLink(repository, skill), repository, refs, scan: id, path: skill.path });
   }
   const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);

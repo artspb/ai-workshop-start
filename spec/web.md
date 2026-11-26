@@ -38,7 +38,9 @@ The core runs in the server; the page is a *thin client*: HTML, CSS and plain Ja
   - One opens *as stored*, without GitHub: `/?scan=<id>`; the box then holds `<repository URL>/tree/<commit>`
   - Updated after each scan; hidden while nothing is stored
 - **Search** every stored scan, in **Scanned before**, above its list: the CLI does not
-  - Matches as the filter does: every word, case-insensitive, in a skill's name or description; no word, no search: the list shows
+  - Every word, case-insensitive, in a skill's name, its description or its repository, `<owner>/<repo>`:
+    `junie-slack` finds every skill of `JetBrains/junie-slack-bot-youtrack`; a word does not span two of them;
+    no word, no search: the list shows
   - Each repository once, from its latest stored scan, at whichever commit or ref; a skill only in an older scan is not found
   - While it has a word, the results in place of the list: each skill's **name**, first sentence (as `scan` prints it),
     its repository, the commit and every ref asked for, and its pinned **link**; sorted by name, then repository, then path
@@ -72,6 +74,6 @@ An organization, `?repo=github.com/<owner>` → `200` with JSON:
 `GET /api/scans/<id>` → `200`, the stored result, as `/api/scan` answers it, `stored` being `<id>`; no such scan: `404`, `{ error }`
 
 `GET /api/search?q=<words>` → `200`, `{ results: [{ id, name, sentence, link, repository, refs, scan }] }`, from the store only:
-the skills of each repository's latest stored scan that match, sorted as the page shows them
+the skills of each repository's latest stored scan that match, by name, description or repository, sorted as the page shows them
 - `sentence`: the description's first sentence, `''` without one; `refs`: the stored scan's; `scan`: its id, for `/api/scans/<id>`
 - No word in `q`, or no store: `{ results: [] }`
