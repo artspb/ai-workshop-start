@@ -77,6 +77,7 @@ await context.close(); await browser.close();  // the video is written on close
 ```
 ```sh
 D=/tmp/demo-issue-<n>
+rm -rf "$D/video" "$D/demo.mp4" "$D/demo.gif"    # an earlier recording
 (cd "$D" && node record.mjs "<url>" video); kill "$(cat "$D/serve.pid")"    # the server is done
 F=$(node -p "require('$D/node_modules/ffmpeg-static')")
 "$F" -i "$D"/video/*.webm -c:v libx264 -pix_fmt yuv420p -movflags +faststart "$D/demo.mp4"
