@@ -67,7 +67,8 @@ jq --arg m "$MARK" --arg o "$OPEN" 'def code: gsub("(?m)^ {0,3}(`{3,}|~{3,})[^\\
   .data.repository.pullRequest.reviewThreads.nodes[]
   | select((.isResolved | not) and (.comments.nodes[-1].body | code | test($m) or test($o) | not))' pr.json
 ```
-Use `jq` itself, installed if missing (`sudo apt-get update && sudo apt-get install -y jq`): `gh --jq` has no backreferences and rejects the pattern.
+Use `jq` itself (`.air/cloud/startup.sh` installs it; where it did not run: `command -v jq || { sudo apt-get update && sudo apt-get install -y jq; }`):
+`gh --jq` has no backreferences and rejects the pattern.
 
 ## 1. Check everything unanswered
 Check out the branch (`gh pr checkout <n>`), read [spec/](../../../spec/) and [AGENTS.md](../../../AGENTS.md).

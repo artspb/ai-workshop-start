@@ -65,10 +65,12 @@ npm run typecheck && npm test && npm run e2e && ./skill-atlas scan ./fixture
 - **Nothing a person sees** (spec, tests, refactoring, skills): no demo; say "No demo: <why>" in the body.
 
 Record with Playwright and ffmpeg in a temporary folder, never as dependencies of the repository.
+Chromium and its system libraries come with the environment (`.air/cloud/startup.sh`); the last line installs them only where it did not run.
 Each block may run in a new shell: it sets `D` again, and the server's PID is kept in a file, not as a job.
 ```sh
 D=/tmp/demo-issue-<n> && mkdir -p "$D" && (cd "$D" && npm init -y >/dev/null \
-  && npm i -s playwright@1.65.1 ffmpeg-static@5.2.0 && npx playwright install --with-deps chromium)
+  && npm i -s playwright@1.65.1 ffmpeg-static@5.2.0)
+(cd "$D" && test -x "$(node -p "require('playwright').chromium.executablePath()")" || npx playwright install --with-deps chromium)
 env -u GITHUB_TOKEN SKILL_ATLAS_CACHE="$D/cache" ./skill-atlas serve --port 0 > "$D/serve.log" 2>&1 &
 echo $! > "$D/serve.pid"; sleep 2; cat "$D/serve.log"    # its URL; no GITHUB_TOKEN
 ```

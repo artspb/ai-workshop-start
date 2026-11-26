@@ -71,7 +71,7 @@ Merge only when **every** check holds; at the first that fails, post nothing and
    ```
    Behind, with checks 1–6 holding: don't merge (the combination is untested), go to section 4 to bring it up to date.
 
-The flags need `jq` itself, installed if missing (`sudo apt-get update && sudo apt-get install -y jq`):
+The flags need `jq` itself (`.air/cloud/startup.sh` installs it; where it did not run: `command -v jq || { sudo apt-get update && sudo apt-get install -y jq; }`):
 `gh --jq` has no backreferences and rejects the fence pattern.
 ```sh
 M='(?m)^<!-- address-review( answers:[0-9,]+)? -->\s*$'
