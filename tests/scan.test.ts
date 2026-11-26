@@ -1,13 +1,15 @@
 // The decisions in spec/analysis.md and spec/cli.md, checked on what the real command prints for
-// ./fixture and for a small GitHub repository answered in tests/helpers.ts. The edge cases of
-// where skills live are yours to add.
+// ./fixture and for a small GitHub repository answered in tests/helpers.ts. ./fixture holds one
+// case of what a project skill is per path; see fixture/README.md.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { test } from 'node:test';
+import { run } from '../src/commands.ts';
+import { findSkills } from '../src/core/find.ts';
 import { openGitHub } from '../src/core/github.ts';
 import { parseSkill } from '../src/core/parse.ts';
 import { replay } from '../src/core/replay.ts';
@@ -38,22 +40,92 @@ test('scan prints the repository, then each skill with its first sentence and pi
   );
 });
 
-test('./fixture: every skill, sorted by name, linked to its file, with a warning for the malformed one', () => {
-  const root = pathToFileURL(FIXTURE).href;
+/** What ./fixture holds, as the spec counts it: five project skills, one of them with a copy. */
+function fixtureOutput(root: string): string {
+  return [
+    'fixture · 5 skills',
+    "code-style — Follow the project's code style.",
+    `  ${root}/.github/skills/code-style/SKILL.md`,
+    'commits — Write commit messages the way this repository does.',
+    `  ${root}/.agents/skills/commits/SKILL.md`,
+    '  also in .claude/skills/commits/SKILL.md',
+    'gradle-bump — Bump the Gradle version of tools/gradle.',
+    `  ${root}/tools/gradle/.claude/skills/gradle-bump/SKILL.md`,
+    'release-checklist',
+    `  ${root}/.agents/skills/release-checklist/SKILL.md`,
+    'release-checklist — Steps before a release.',
+    `  ${root}/.github/skills/release-checklist/SKILL.md`,
+  ].join('\n');
+}
+
+test('./fixture: every project skill, sorted by name then path, copies folded, a warning for the malformed one', () => {
   assert.equal(fixture.code, 0);
+  assert.equal(fixture.stdout, fixtureOutput(pathToFileURL(FIXTURE).href));
   assert.equal(
-    fixture.stdout,
-    [
-      'fixture · 3 skills',
-      "code-style — Follow the project's code style.",
-      `  ${root}/.github/skills/code-style/SKILL.md`,
-      'commits — Write commit messages the way this repository does.',
-      `  ${root}/.claude/skills/commits/SKILL.md`,
-      'release-checklist',
-      `  ${root}/.agents/skills/release-checklist/SKILL.md`,
-    ].join('\n'),
+    fixture.stderr,
+    'warning: .agents/skills/release-checklist/SKILL.md: malformed front matter: ' +
+      'Nested mappings are not allowed in compact mappings at line 3, column 14; using the directory name',
   );
-  assert.match(fixture.stderr, /^warning: \.agents\/skills\/release-checklist\/SKILL\.md: malformed front matter: /);
+});
+
+/** A directory as GitHub's tree lists it: every file, a symbolic link as itself, with mode 120000. */
+function gitTree(root: string, directory = ''): { path: string; mode: string; type: string; sha: string }[] {
+  return readdirSync(join(root, directory), { withFileTypes: true }).flatMap((entry) => {
+    const path = directory ? `${directory}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) return gitTree(root, path);
+    // git keeps a symbolic link, to a file or a directory, as a blob
+    return [{ path, mode: entry.isSymbolicLink() ? '120000' : '100644', type: 'blob', sha: '0' }];
+  });
+}
+
+test('./fixture on GitHub, listed through the tree: the same project skills, symbolic links left out', async () => {
+  // The fixture as GitHub's tree answers it: every file, the symbolic links with mode 120000.
+  const tree = gitTree(FIXTURE);
+  const raw = Object.fromEntries(
+    tree
+      .filter((item) => item.mode !== '120000')
+      .map((item) => [
+        `https://raw.githubusercontent.com/JetBrains/fixture/${EXAMPLE_COMMIT}/${item.path}`,
+        { status: 200, body: readFileSync(join(FIXTURE, item.path), 'utf8') },
+      ]),
+  );
+  const github = replay({
+    'https://api.github.com/repos/JetBrains/fixture': { status: 200, body: { full_name: 'JetBrains/fixture', default_branch: 'main' } },
+    'https://api.github.com/repos/JetBrains/fixture/commits/main': { status: 200, body: { sha: EXAMPLE_COMMIT } },
+    [`https://api.github.com/repos/JetBrains/fixture/git/trees/${EXAMPLE_COMMIT}?recursive=1`]: {
+      status: 200,
+      body: { truncated: false, tree },
+    },
+    ...raw,
+  });
+  const stdout: string[] = [];
+  const code = await run(['scan', 'https://github.com/JetBrains/fixture'], {
+    open: (input) => openGitHub(input, { fetch: github }),
+    print: (text) => stdout.push(text),
+    error: () => {},
+  });
+  assert.equal(code, 0);
+  assert.equal(
+    stdout.join('\n'),
+    fixtureOutput(`https://github.com/JetBrains/fixture/blob/${EXAMPLE_COMMIT}`).replace('fixture · ', 'JetBrains/fixture · '),
+  );
+});
+
+test('a skill under .git or node_modules is not a project skill', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'skill-atlas-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const skill = '---\nname: x\ndescription: X.\n---\n';
+  for (const directory of ['.git', 'node_modules/some-package']) {
+    mkdirSync(join(root, directory, '.claude/skills/x'), { recursive: true });
+    writeFileSync(join(root, directory, '.claude/skills/x/SKILL.md'), skill);
+  }
+  const scanned = await atlas(['scan', root]);
+  assert.equal(scanned.code, 0, scanned.stderr);
+  assert.equal(scanned.stdout, `${basename(root)} · 0 skills`);
+  // GitHub never lists .git, but a repository can commit node_modules.
+  assert.deepEqual(findSkills(['node_modules/p/.claude/skills/x/SKILL.md', '.claude/skills/x/SKILL.md']), [
+    { path: '.claude/skills/x/SKILL.md', name: 'x' },
+  ]);
 });
 
 test('the CLI prints the result at once and stores nothing', (t) => {
