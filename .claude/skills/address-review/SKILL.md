@@ -34,12 +34,14 @@ This skill runs on every submitted review, and your own round is a review too. S
 - the pull request is closed, merged, a draft, or from a fork (`isCrossRepository`);
 - nothing is **unanswered** (below) and you have no pending round (`R`, section 3): a stranded one, whose replies already read as
   answers, is still submitted (section 3), even with nothing else to answer;
-- the pull request already has **3 or more** commits starting with `Address review` and you have no pending round
-  (a stranded round 3 is still submitted, section 3, without a new commit): then, once, post
+- something is unanswered, but the pull request already has **3 or more** commits starting with `Address review` and
+  you have no pending round (a stranded round 3 is still submitted, section 3, without a new commit): then, once, post
   `Stopped after 3 rounds of review fixes; the open threads are for a person.` as a pull request comment
   (`gh pr comment <n>`, with the marker), unless one of the pull request's `comments` has it already.
-  It hands the open threads to the owner ([Handing over to a person](#handing-over-to-a-person)): after that line,
-  `@<login>: <the open threads>: fix them, or resolve them as fine as is?`
+  It hands the **unanswered** threads and review bodies to the owner ([Handing over to a person](#handing-over-to-a-person)):
+  after that line, `@<login>: <the unanswered threads>: fix them, or resolve them as fine as is?`
+  Only those: a thread your round answered waits for Code Review's re-review, which resolves it or asks the owner in
+  its "stays open" reply (code-review, section 4). So round 3's own submit, with nothing unanswered, posts nothing.
 
 ```sh
 gh api graphql -F owner='{owner}' -F repo='{repo}' -F n=<n> -f query='

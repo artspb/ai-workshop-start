@@ -101,6 +101,7 @@ test('each hand-over the issue names points to the section', () => {
     assert.ok(item.includes(LINK), `${name}: the item with "${phrase}" does not link to the section`);
   };
   handsOver('code-review', '**Leave it open**');
+  handsOver('code-review', 'No review of <headRefOid>');
   handsOver('address-review', '**A choice the spec leaves open, or two reviewers disagree**');
   handsOver('address-review', 'Stopped after 3 rounds of review fixes');
   handsOver('merge-when-reviewed', 'For a person to resolve');
