@@ -180,6 +180,11 @@ test('/tree/<ref>: that commit, listed through its tree even with a token; an un
       body: '---\nname: commits\ndescription: Commit messages, as of v1.0.\n---\n',
     },
     'https://api.github.com/repos/JetBrains/example/commits/no-such-ref': { status: 404, body: { message: 'Not Found' } },
+    // What GitHub answers for a branch that does not exist: 422, not 404.
+    'https://api.github.com/repos/JetBrains/example/commits/no-such-branch': {
+      status: 422,
+      body: { message: 'No commit found for SHA: no-such-branch', status: '422' },
+    },
   });
   // No search is recorded: a search would fail the scan.
   const source = await openGitHub('https://github.com/JetBrains/example/tree/v1.0/', { fetch: github, token: 'test' });
@@ -189,6 +194,12 @@ test('/tree/<ref>: that commit, listed through its tree even with a token; an un
   await assert.rejects(openGitHub('github.com/JetBrains/example/tree/no-such-ref', { fetch: github, token: 'test' }), {
     message: 'Not found in https://github.com/JetBrains/example: no-such-ref',
   });
+  await assert.rejects(openGitHub('https://github.com/JetBrains/example/tree/no-such-branch', { fetch: github, token: 'test' }), {
+    message: 'Not found in https://github.com/JetBrains/example: no-such-branch',
+  });
+  const cli = await atlas(['scan', 'https://github.com/JetBrains/example/tree/no-such-branch']);
+  assert.equal(cli.code, 1);
+  assert.equal(cli.stderr, 'Not found in https://github.com/JetBrains/example: no-such-branch');
   assert.equal(parseGitHubUrl('github.com/JetBrains/example/tree/main/docs'), undefined);
 });
 

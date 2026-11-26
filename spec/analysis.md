@@ -3,6 +3,7 @@
 A **GitHub repository** URL, or a local directory
 - `github.com/<owner>/<repo>`: the default branch
 - `github.com/<owner>/<repo>/tree/<ref>`: a commit, a branch or a tag; one path segment
+  - A ref that names no commit (GitHub answers `404`, or `422`) → `Not found in <repository>: <ref>`, exit code 1
 - `github.com/<owner>`: an organization or a user, every repository of it; see [organization](#organization)
 ## Output
 Every *project skill*: **name**, **description**, **link**

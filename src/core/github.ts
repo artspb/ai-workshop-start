@@ -78,6 +78,7 @@ export async function openGitHub(input: string, options: GitHubOptions): Promise
   const { sha } = await github.json<{ sha: string }>(
     `${API}/repos/${id}/commits/${encodeURIComponent(ref)}`,
     `Not found in https://github.com/${id}: ${ref}`,
+    [404, 422], // 422: a ref that names no commit, "No commit found for SHA"
   );
   // The tree first: it is the commit's own. Code search, with a token, only for a default branch
   // whose tree is too large for one answer: the index sees only the default branch.
@@ -246,13 +247,13 @@ function client({ fetch, token }: GitHubOptions) {
     }
   }
 
-  async function request(url: string, notFound: string): Promise<unknown> {
+  async function request(url: string, notFound: string, missing: number[]): Promise<unknown> {
     const response = await get(url, { headers });
     if (response.ok) return response.json();
     const body: unknown = await response.json().catch(() => undefined);
     const message = (body as { message?: unknown } | undefined)?.message;
     const text = typeof message === 'string' ? message : '';
-    if (response.status === 404) throw new AtlasError(notFound);
+    if (missing.includes(response.status)) throw new AtlasError(notFound);
     if ((response.status === 403 || response.status === 429) && /rate limit/i.test(text)) throw rateLimit(response);
     throw failure(response, url, text);
   }
@@ -269,9 +270,9 @@ function client({ fetch, token }: GitHubOptions) {
   }
 
   return {
-    /** A GitHub API answer; `notFound` explains a 404. */
-    json<T>(url: string, notFound = `Not found on GitHub: ${url}`): Promise<T> {
-      if (!answers.has(url)) answers.set(url, request(url, notFound));
+    /** A GitHub API answer; `notFound` explains a 404, or another status in `missing`. */
+    json<T>(url: string, notFound = `Not found on GitHub: ${url}`, missing = [404]): Promise<T> {
+      if (!answers.has(url)) answers.set(url, request(url, notFound, missing));
       return answers.get(url) as Promise<T>;
     },
     /** A file's bytes at the scanned commit, or undefined if it is not there. */

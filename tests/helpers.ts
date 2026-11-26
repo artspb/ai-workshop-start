@@ -16,6 +16,11 @@ export const EXAMPLE_COMMIT = '5ab6270ab772d113e8ad52ebfcaa0109c522ae00';
 const EXAMPLE: Recording = {
   'https://api.github.com/repos/JetBrains/example': { status: 200, body: { full_name: 'JetBrains/example', default_branch: 'main' } },
   'https://api.github.com/repos/JetBrains/example/commits/main': { status: 200, body: { sha: EXAMPLE_COMMIT } },
+  // A branch that does not exist: GitHub answers 422, not 404.
+  'https://api.github.com/repos/JetBrains/example/commits/no-such-branch': {
+    status: 422,
+    body: { message: 'No commit found for SHA: no-such-branch', status: '422' },
+  },
   [`https://api.github.com/repos/JetBrains/example/git/trees/${EXAMPLE_COMMIT}?recursive=1`]: {
     status: 200,
     body: { truncated: false, tree: [{ path: '.claude/skills/commits/SKILL.md', mode: '100644', type: 'blob', sha: '0' }] },

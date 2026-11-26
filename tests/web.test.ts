@@ -127,6 +127,13 @@ test('/api/scan, an error the CLI reports with exit code 1: 400 with its message
   const unknown = await scan('github.com/JetBrains/unknown');
   assert.equal(unknown.status, 400);
   assert.match(unknown.body.error, /JetBrains\/unknown/);
+  // GitHub answers 422 for a branch that does not exist: worded as not found, as the CLI does.
+  const branch = await scan('https://github.com/JetBrains/example/tree/no-such-branch');
+  assert.deepEqual(branch, {
+    status: 400,
+    type: 'application/json; charset=utf-8',
+    body: { error: 'Not found in https://github.com/JetBrains/example: no-such-branch' },
+  });
 });
 
 test('/api/scan, anything else: 500 with the message', async () => {
