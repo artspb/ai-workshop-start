@@ -191,6 +191,42 @@ test('a rejected token: the scan stops, exit code 1', async () => {
   assert.equal(scanned.stderr, 'GitHub rejected the token in GITHUB_TOKEN');
 });
 
+test('a token rejected by the time the files are read: the scan stops, exit code 1, the 404 is not "not found"', async (t) => {
+  // raw.githubusercontent.com answers 404, not 401, for a token it does not accept; the API answers 401.
+  const directory = mkdtempSync(join(tmpdir(), 'skill-atlas-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const store = openStore(directory);
+  const file = `https://raw.githubusercontent.com/JetBrains/zeta/${commitOf('zeta')}/.claude/skills/release/SKILL.md`;
+  const scanned = await atlas(['scan', 'github.com/JetBrains'], {
+    store,
+    github: recording({
+      [file]: { status: 404, body: '404: Not Found' },
+      [`${API}/rate_limit`]: { status: 401, body: { message: 'Bad credentials' } },
+    }),
+  });
+  assert.equal(scanned.code, 1);
+  assert.equal(scanned.stdout, '');
+  assert.equal(scanned.stderr, 'GitHub rejected the token in GITHUB_TOKEN');
+  assert.ok(!(await store.list()).some((scan) => scan.repository.id === 'JetBrains/zeta'));
+});
+
+test('a file not found with a token the API accepts: a warning, as without a token', async () => {
+  const file = `https://raw.githubusercontent.com/JetBrains/zeta/${commitOf('zeta')}/.claude/skills/release/SKILL.md`;
+  const scanned = await atlas(['scan', 'github.com/JetBrains'], {
+    github: recording({
+      [file]: { status: 404, body: '404: Not Found' },
+      [`${API}/rate_limit`]: { status: 200, body: { resources: {} } },
+    }),
+  });
+  assert.equal(scanned.code, 0, scanned.stderr);
+  assert.ok(scanned.asked.includes(`${API}/rate_limit`));
+  assert.ok(scanned.authorized.includes(`${API}/rate_limit`));
+  assert.ok(
+    scanned.stderr.includes('warning: JetBrains/zeta: .claude/skills/release/SKILL.md: listed, but not found at the scanned commit; skipped'),
+    scanned.stderr,
+  );
+});
+
 test('GitHub unreachable: the scan stops, exit code 1', async () => {
   const github = recording();
   delete github[`${API}/repos/JetBrains/beta`]; // not recorded: the fetch fails, as without a network

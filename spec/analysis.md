@@ -34,6 +34,8 @@ a regular file named exactly `SKILL.md` at **`<root>/<name>/SKILL.md`**.
 - No such owner → a clear message, exit code 1; the rate limit, a rejected token, GitHub unreachable: the scan stops, exit code 1,
   on any request, a file read too
 - With `GITHUB_TOKEN`, every request carries it, a file read too: a private repository's files answer only with it
+  - A file that answers 404 with the token: the token is checked (`/rate_limit`, no request of the limit); rejected → the scan stops,
+    not "not found": the file host answers 404, not 401, for a token it does not accept
 - 8 repositories at a time
 ## Persistence
 A GitHub scan listed through its **tree** is **stored**, with `GITHUB_TOKEN` or without; the same repository at the same commit is not scanned again.

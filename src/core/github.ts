@@ -204,7 +204,12 @@ function client({ fetch, token }: GitHubOptions) {
     async raw(url: string): Promise<Uint8Array | undefined> {
       // A private repository's files are read with the token too: without it, they answer 404.
       const response = await get(url, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
-      if (response.status === 404) return undefined;
+      if (response.status === 404) {
+        // The file host answers 404, not 401, for a token it does not accept: a token that stopped
+        // working would make every file "not found". The API tells; `/rate_limit` costs no request.
+        if (token && (await get(`${API}/rate_limit`, { headers })).status === 401) throw failure(401, url);
+        return undefined;
+      }
       if (!response.ok) throw failure(response.status, url);
       return new Uint8Array(await response.arrayBuffer());
     },
