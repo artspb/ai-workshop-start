@@ -27,6 +27,9 @@ The core runs in the server; the page is a *thin client*: HTML, CSS and plain Ja
 - A **filter**: every word, case-insensitive, in the name or the description
 - The address holds the scan: `/?repo=<URL | directory | organization URL>` scans on open; each scan updates it; *back* scans again
 - An error: its message, in place of the result
+  - The [rate limit](analysis.md#rate-limit) with a reset time: in the *viewer's* local time and format,
+    `GitHub rate limit reached; it resets at 14:32 (in 20 minutes)`; without `GITHUB_TOKEN`,
+    `GitHub rate limit reached; set GITHUB_TOKEN, or wait: it resets at 14:32 (in 20 minutes)`; none: the message
 - **Scanned before**: every [stored scan](analysis.md#persistence), the latest first: the repository, the commit,
   every ref asked for (`main (default branch)`, a `/tree/<ref>`), the skill count, the warning count and when;
   only the stored scan on the page is marked, by its id
@@ -47,6 +50,8 @@ The core runs in the server; the page is a *thin client*: HTML, CSS and plain Ja
 `{ repository, skills: [{ id, name, description, path, commit, copies, link }], warnings, stored }`
 - `stored`: the id of the [stored scan](analysis.md#persistence), as `/api/scans` lists it; `null` when not stored (a local directory, a code search not exact for the commit, a store that cannot be written)
 - An error the CLI reports with exit code 1 (no `repo`, unreachable, not found): `400`, `{ error: <message> }`
+  - The rate limit: `{ error, rateLimit: { resetsAt, token } }`, `error` without the reset time; `resetsAt` an ISO 8601 time,
+    `null` when GitHub did not say; `token`: whether the server has `GITHUB_TOKEN`. The page words the time
 - Anything else: `500`, `{ error }`; an unknown path: `404`
 
 An organization, `?repo=github.com/<owner>` → `200` with JSON:
@@ -56,7 +61,7 @@ An organization, `?repo=github.com/<owner>` → `200` with JSON:
 - The rate limit, a rejected token, GitHub unreachable, no such owner: `400`, as the CLI's exit code 1
 - `&progress`, `?repo=github.com/<owner>&progress`: the answer is **NDJSON**, `application/x-ndjson`, one object a line,
   `200` from the first line: `{ progress: { scanned, repositories } }`, `scanned` 0 first, then one more as each repository ends;
-  the last line the answer above, or `{ error }` when the scan fails on the way (the rate limit, a rejected token)
+  the last line the answer above, or `{ error }` when the scan fails on the way (the rate limit, a rejected token), `rateLimit` too as above
   - No such owner, an error before the list: answered as without `&progress`; a repository, a directory: JSON, as without it
 - The page leaves before the answer (another scan, *back*, a reload, a closed tab): the request closes, and no repository
   not started yet is asked for; the ones started end, nothing is answered. The page aborts its scan before the next one, an empty address too

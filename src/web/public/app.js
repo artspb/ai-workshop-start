@@ -2,7 +2,7 @@
 // /?repo=<URL | directory | organization URL> scans, /?scan=<id> opens a stored scan.
 import { filterRepositories, filterSkills } from './filter.js';
 import { addressRequest, historyView, scanSignals, searchView, storedBox, storedOnPage } from './history.js';
-import { progressText, progressUrl, readAnswer, stoppedText } from './progress.js';
+import { errorText, progressText, progressUrl, readAnswer, stoppedText } from './progress.js';
 
 const $ = (id) => document.getElementById(id);
 const form = $('scan');
@@ -90,7 +90,7 @@ async function scanAddress() {
   if (scan !== latest) return;
   showRunning(null);
   if (answer.error) {
-    showStatus(answer.error, true);
+    showStatus(errorText(answer), true);
   } else {
     status.hidden = true;
     if (request.scan) input.value = storedBox(answer.repository);

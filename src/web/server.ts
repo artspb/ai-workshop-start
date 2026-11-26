@@ -2,7 +2,7 @@
 // local directories and never sees GITHUB_TOKEN. Local only. See spec/web.md.
 import { readFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { AtlasError } from '../core/errors.ts';
+import { AtlasError, RateLimited } from '../core/errors.ts';
 import { firstSentence, skillLink } from '../core/model.ts';
 import { scanOrganization, type Organization } from '../core/organization.ts';
 import { scan, type ScanResult, type Source, type Store, type StoredScan } from '../core/scan.ts';
@@ -106,7 +106,7 @@ async function scanAnswer(
     const { result, stored } = await scan(await open(input.trim()), store);
     return [200, answer(result, stored)];
   } catch (error) {
-    if (error instanceof AtlasError) return [400, { error: error.message }];
+    if (error instanceof AtlasError) return [400, errorAnswer(error)];
     throw error;
   }
 }
@@ -134,6 +134,12 @@ async function organizationAnswer(
     repositories: scans.flatMap(({ result, stored }) => (result?.skills.length ? [answer(result, stored)] : [])),
     warnings: scans.flatMap(({ id, result, error }) => (result ? result.warnings : [error]).map((warning) => `${id}: ${warning}`)),
   };
+}
+
+/** An error the CLI reports with exit code 1; the rate limit with when it resets, for the page to word in the viewer's time. */
+function errorAnswer(error: AtlasError) {
+  if (!(error instanceof RateLimited)) return { error: error.message };
+  return { error: error.message, rateLimit: { resetsAt: error.resetsAt?.toISOString() ?? null, token: error.token } };
 }
 
 /** A result as the page reads it: every skill with its link, and the stored scan's id, if stored. */

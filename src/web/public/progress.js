@@ -58,3 +58,21 @@ export function stoppedText(repo, progress) {
   if (!progress) return `Stopped scanning ${repo}`;
   return `Stopped scanning ${repo} at ${progress.scanned} of ${repositories(progress.repositories)}; the ones scanned are in Scanned before`;
 }
+
+/**
+ * An error answer as the status shows it: the rate limit with when it resets, in the viewer's local
+ * time and format; the time and the minutes rounded up, so trying at the time shown works. Any other
+ * error, or no reset time: its message.
+ * @param {{ error: string, rateLimit?: { resetsAt: string | null, token: boolean } }} answer
+ * @param {number} [now]
+ * @param {Intl.DateTimeFormatOptions & { locale?: string }} [format] the viewer's, unless a test picks one
+ */
+export function errorText({ error, rateLimit }, now = Date.now(), { locale, ...format } = {}) {
+  const resetsAt = rateLimit?.resetsAt ? Date.parse(rateLimit.resetsAt) : NaN;
+  if (Number.isNaN(resetsAt)) return error;
+  const minute = 60_000;
+  const time = new Date(Math.ceil(resetsAt / minute) * minute).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', ...format });
+  const minutes = Math.max(1, Math.ceil((resetsAt - now) / minute));
+  const resets = `it resets at ${time} (in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'})`;
+  return `GitHub rate limit reached; ${rateLimit.token ? resets : `set GITHUB_TOKEN, or wait: ${resets}`}`;
+}

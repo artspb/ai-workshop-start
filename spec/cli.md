@@ -21,6 +21,13 @@ build-tools-bump-gradle-api — Bumps the Gradle API…
 - The owner, how many repositories it has and how many skills they hold; then each repository *with skills*, as `scan` prints it, an empty line before it
 - Repositories sorted by name, case-insensitive; one without skills is only counted
 - Warnings on *stderr*, the repository first: `warning: <owner>/<repo>: <warning>`
+## Rate limit
+The [rate limit](analysis.md#rate-limit) on *stderr*, exit code 1, the time in the terminal's time zone, `HH:MM`, 24-hour:
+```
+GitHub rate limit reached; it resets at 14:32 (in 20 minutes)
+GitHub rate limit reached; set GITHUB_TOKEN, or wait: it resets at 14:32 (in 20 minutes)
+```
+the second without `GITHUB_TOKEN`; no reset time from GitHub: the message without it, `try again later` or `set GITHUB_TOKEN`
 ## End-to-end tests
 Real repositories, each at a fixed commit: `tests/e2e/<owner>-<repo>.txt` is what the scan prints, stdout then stderr.
 - `npm run e2e` compares; `UPDATE=1 npm run e2e` rewrites the files

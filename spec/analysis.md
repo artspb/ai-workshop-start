@@ -37,6 +37,16 @@ a regular file named exactly `SKILL.md` at **`<root>/<name>/SKILL.md`**.
   - A file that answers 404 with the token: the token is checked (`/rate_limit`, no request of the limit); rejected → the scan stops,
     not "not found": the file host answers 404, not 401, for a token it does not accept
 - 8 repositories at a time
+## Rate limit
+GitHub refuses a request for the rate limit: `403` or `429` saying *rate limit*, or `429` on a file read. The scan stops,
+an organization's too, exit code 1, and the error tells **when the limit resets**, if GitHub said so:
+- A secondary limit: `retry-after`, seconds from the answer
+- Else the primary limit: `x-ratelimit-reset`, Unix seconds; not when `x-ratelimit-remaining` is there and not `0`:
+  that limit is not the one reached
+- Neither: no reset time, none guessed
+- The message without a reset time: `GitHub rate limit reached; try again later`; without `GITHUB_TOKEN`,
+  `GitHub rate limit reached; set GITHUB_TOKEN`. Each client words the reset time: the [CLI](cli.md#rate-limit), the [web view](web.md#the-page)
+- A reset time is shown rounded *up* to the minute, `in <n> minutes` rounded up too, at least 1: trying at the time shown works
 ## Persistence
 A GitHub scan listed through its **tree** is **stored**, with `GITHUB_TOKEN` or without; the same repository at the same commit is not scanned again.
 - The key: the repository, the **resolved commit**, and how it was listed; a branch that moved is a new commit, a new scan
