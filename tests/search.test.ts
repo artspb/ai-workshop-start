@@ -125,6 +125,28 @@ test('/api/search: sorted by name, then repository, then path', async (t) => {
   ]);
 });
 
+test('/api/search: skills of one name in one repository, sorted by path', async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), 'skill-atlas-search-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const store = openStore(directory);
+  // Stored out of path order, so the order found is the sort's, not the store's.
+  await store.set(`example@${NEW}`, {
+    ref: 'main (default branch)',
+    result: result('JetBrains/example', NEW, [
+      ['commits', 'Commit messages, for Claude.', '.claude/skills/commits/SKILL.md'],
+      ['commits', 'Commit messages, for every agent.', '.agents/skills/commits/SKILL.md'],
+    ]),
+  });
+  const server = createWebServer({ open: () => Promise.reject(new Error('offline')), store });
+  const base = await listen(server, 0);
+  t.after(() => server.close());
+  const { results } = (await (await fetch(`${base}/api/search?q=commits`)).json()) as { results: { id: string }[] };
+  assert.deepEqual(
+    results.map((r) => r.id),
+    ['JetBrains/example:.agents/skills/commits/SKILL.md', 'JetBrains/example:.claude/skills/commits/SKILL.md'],
+  );
+});
+
 test('/api/search: a repository scanned at several commits shows its skills once, from its latest stored scan', async (t) => {
   const { search, scan } = await serve(t);
   const { results } = (await search('commits')).body;
