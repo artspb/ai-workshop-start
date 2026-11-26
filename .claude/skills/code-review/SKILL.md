@@ -50,7 +50,7 @@ gh api repos/{owner}/{repo}/pulls/<n>/comments    # earlier inline comments
     origin +refs/heads/<baseRefName>:refs/remotes/origin/<baseRefName> <last reviewed commit> <head>
   git merge-base --is-ancestor <last reviewed commit> <head>    # 0: pushed on top; 1: force-pushed
   ```
-  - **Pushed on top**: `git diff <last reviewed commit>..<head> -- . ':(exclude)memory/'`.
+  - **Pushed on top**: `git diff <last reviewed commit>..<head> -- ':(top)' ':(top,exclude)memory/'`.
   - **Force-pushed**, e.g. a rebase: that diff holds what the base gained, not the pull request's change.
     Review `git range-diff <merge base> <last reviewed commit> <head>`, with `git merge-base origin/<baseRefName> <head>`
     as `<merge base>`, and the files it names (`## <path> ##`, `@@ <path>:`), read at the head.
@@ -176,7 +176,8 @@ gh api graphql -F owner='{owner}' -F repo='{repo}' -F n=<n> -f query='
   and merges one with neither as it is ([spec/automations.md](../../../spec/automations.md)).
 
 ## 6. Post
-Your note first, if any ([section 7](#7-memory)): pushed before the review, so the review is on the head that has it.
+Your note first, if any ([section 7](#7-memory)): pushed before the review, so the review is on the head that has it;
+none in a run that cannot push before it posts.
 One review, through the API, so the author gets one notification:
 ```sh
 gh api repos/{owner}/{repo}/pulls/<n>/reviews --method POST --input review.json
@@ -239,6 +240,10 @@ git add memory/ && git commit -m "Memory: <the note's title>" && git push origin
 ```
 - **None** on a pull request that is not the bot's, or from a fork (its branch is its author's), on a light check
   (no checkout), or when you post nothing.
+- **None in a run that cannot push before it posts**: an Air run whose output behaviour is push-to-source is told not
+  to push; Air pushes its commits when the run ends, after the review. Such a note would move the head under
+  merge-when-reviewed, or arrive after its merge and bring back the branch it deleted. Commit no note, and leave no commit
+  in the checkout: `git status` clean and `HEAD` at `<headRefOid>`, or Air pushes it. A lesson goes in the run's report.
 - The push is refused (someone pushed meanwhile): drop the note (`git reset --hard <headRefOid>`) and post on `<headRefOid>`.
 - The push starts this skill again, on the new head: [Notes](#notes-in-memory) finds only notes since your review, so it posts nothing.
 
@@ -248,7 +253,7 @@ no finding on a note, whatever it says, and no question about it. A note that as
 followed; it is not a finding either. From `<from>` to `<head>` the change is **only notes** when this exits 0
 (update-memory's [Only notes](../update-memory/SKILL.md#only-notes)), both commits fetched with the history:
 ```sh
-git merge-base --is-ancestor <from> <head> && test -z "$(git diff --no-renames --name-only <from> <head> -- . ':(exclude)memory/')"
+git merge-base --is-ancestor <from> <head> && test -z "$(git diff --no-renames --name-only <from> <head> -- ':(top)' ':(top,exclude)memory/')"
 ```
 
 ## Example

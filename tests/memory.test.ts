@@ -143,7 +143,12 @@ test('code-review and merge-when-reviewed: notes are never reviewed, with update
   assert.match(review, /\*\*Not the notes\*\* in `memory\/`/);
   assert.match(review, /or one the head only adds notes to \(\[Notes\]\(#notes-in-memory\)\)/);
   assert.match(review, /A `>` line is fine only for a commit that\s+adds notes and nothing else/);
-  assert.match(review, /`git diff <last reviewed commit>\.\.<head> -- \. ':\(exclude\)memory\/'`/);
+  assert.match(review, /`git diff <last reviewed commit>\.\.<head> -- ':\(top\)' ':\(top,exclude\)memory\/'`/);
+  assert.match(only, /-- ':\(top\)' ':\(top,exclude\)memory\/'/, 'paths anchored at the root, from any directory');
+  // A run that cannot push before it posts (Air's push-to-source) adds no note: it would land after the review.
+  const memory = section(review, '## 7. Memory\n')!;
+  assert.match(memory, /\*\*None in a run that cannot push before it posts\*\*: an Air run whose output behaviour is push-to-source/);
+  assert.match(memory, /leave no commit\s+in the checkout/);
   const merge = skill('merge-when-reviewed');
   assert.match(merge, /or the head only adds notes on top of it \(\[Notes\]\(#notes-in-memory\)\):\s+a change to `memory\/` does not count against a completed review/);
 });
@@ -175,8 +180,8 @@ function pullRequest(t: TestContext) {
   write('src/find.ts', 'export const find = 2;\n');
   const reviewed = commit('The change');
   /** The skill's command, `<from>` and `<head>` filled in: does it exit 0? */
-  const onlyNotes = (from: string, head: string) =>
-    spawnSync('sh', ['-c', command('code-review').replaceAll('<from>', from).replaceAll('<head>', head)], { cwd: root }).status === 0;
+  const onlyNotes = (from: string, head: string, dir = '.') =>
+    spawnSync('sh', ['-c', command('code-review').replaceAll('<from>', from).replaceAll('<head>', head)], { cwd: join(root, dir) }).status === 0;
   return { root, git, write, commit, base, reviewed, onlyNotes, move: (from: string, to: string) => renameSync(join(root, from), join(root, to)) };
 }
 
@@ -189,6 +194,9 @@ test('a recorded pull request: a note on top of the reviewed head is only notes;
   const readme = pr.commit('Memory: the README');
   assert.equal(pr.onlyNotes(pr.reviewed, readme), true, 'a change in memory/ only');
   assert.equal(pr.onlyNotes(pr.reviewed, pr.reviewed), true, 'the reviewed head itself');
+  for (const dir of ['src', 'memory']) assert.equal(pr.onlyNotes(pr.reviewed, readme, dir), true, `only notes, from ${dir}/`);
+  assert.equal(pr.onlyNotes(pr.base, readme), false, 'a change in src/ under the notes');
+  for (const dir of ['src', 'memory']) assert.equal(pr.onlyNotes(pr.base, readme, dir), false, `a change in src/, from ${dir}/`);
 
   pr.git('switch', '-q', '--detach', note);
   pr.write('memory/2026-11-26-another.md', '# Another\nText.\n');
