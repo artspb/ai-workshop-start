@@ -132,6 +132,8 @@ gh api graphql -F owner='{owner}' -F repo='{repo}' -F n=<n> -f query='
   ```
 - **Leave it open**, and reply once in it saying why, when you are not satisfied: in particular when a **blocking**
   finding is not fixed, or when the answer hands a decision to a person (a choice the spec leaves open).
+  Such a reply hands the thread over: it asks the owner the decision, with its options, unless a comment of the bot
+  in the thread already did ([Handing over to a person](#handing-over-to-a-person)).
   The reply ends with Code Review's marker, on a line of its own: `<!-- code-review: stays open -->`. address-review
   does not answer a thread that ends in it, so the thread waits for a person, or for a push that fixes it (you resolve
   it then, on that re-review), instead of starting another round of answers and re-reviews.
@@ -220,3 +222,15 @@ An inline comment on `src/core/scan.ts:21`:
 > ```suggestion
 >     const key = JSON.stringify([file.name, text]);
 > ```
+
+## Handing over to a person
+Every skill that leaves a decision for a person follows this section, word for word: the person is told, so a decision
+never waits unseen until someone checks the pull requests by hand.
+1. **Mention the owner**: the `@<login>` in the [Owner](../../../AGENTS.md#owner) section of AGENTS.md, written there
+   only, never in a skill, so GitHub notifies them.
+2. **Once per hand-over**, in the comment that states the decision: not in every reply, summary or routine comment.
+3. **A question with its options**, so it can be answered without reading the whole thread:
+   `@<login>: <the decision, as a question>? <option one, and what follows from it>, or <option two, and what follows>.`
+4. **Never again for the same decision**: a comment of the bot in the same thread, or on the same pull request or issue
+   about the same decision, already mentions the owner → no mention. A re-run that finds the decision still open
+   posts nothing new.

@@ -193,8 +193,21 @@ The two changes contradict each other, the spec does not say which wins, or the 
 would be a guess. **Behind** too: a branch that applied cleanly but fails the verification breaks with what the base
 gained, and fixing that is a change nobody reviewed; its comment names the failing check instead of a conflict.
 Then rebase nothing (`git rebase --abort` while it runs; once it has finished, put the branch back),
-and leave **one** comment for a person:
+and leave **one** comment for a person, the owner ([Handing over to a person](#handing-over-to-a-person)):
 ```sh
-gh pr comment <n> --body $'Not rebased: <headRefOid short> conflicts with <baseRefName> in <files>. <For each: what the pull request does, what the base does, and why they cannot both hold, or what the spec leaves open.> For a person to resolve.\n\n<!-- merge-when-reviewed conflict:<headRefOid> -->'
+gh pr comment <n> --body $'Not rebased: <headRefOid short> conflicts with <baseRefName> in <files>. <For each: what the pull request does, what the base does, and why they cannot both hold, or what the spec leaves open.> For a person to resolve.\n\n@<login>: <the decision, as a question>? <option one>, or <option two>.\n\n<!-- merge-when-reviewed conflict:<headRefOid> -->'
 ```
+A behind branch that fails the verification gets the same comment, `fails <the check>` in place of `conflicts with`.
 The marker line names the head, so the next review of the same head posts nothing again; a new head is judged anew.
+
+## Handing over to a person
+Every skill that leaves a decision for a person follows this section, word for word: the person is told, so a decision
+never waits unseen until someone checks the pull requests by hand.
+1. **Mention the owner**: the `@<login>` in the [Owner](../../../AGENTS.md#owner) section of AGENTS.md, written there
+   only, never in a skill, so GitHub notifies them.
+2. **Once per hand-over**, in the comment that states the decision: not in every reply, summary or routine comment.
+3. **A question with its options**, so it can be answered without reading the whole thread:
+   `@<login>: <the decision, as a question>? <option one, and what follows from it>, or <option two, and what follows>.`
+4. **Never again for the same decision**: a comment of the bot in the same thread, or on the same pull request or issue
+   about the same decision, already mentions the owner → no mention. A re-run that finds the decision still open
+   posts nothing new.
