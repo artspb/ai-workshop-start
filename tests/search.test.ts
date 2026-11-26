@@ -113,6 +113,40 @@ test('/api/search: matches as the filter does, every word, case-insensitive, in 
   assert.deepEqual(found((await search('commit gradle')).body), []);
 });
 
+test('/api/search: a word in the repository, <owner>/<repo>, finds its skills too', async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), 'skill-atlas-search-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const store = openStore(directory);
+  // The issue's case: a skill whose name and description do not hold `junie-slack`, its repository does.
+  await store.set(`junie-slack-bot-youtrack@${NEW}`, {
+    ref: 'main (default branch)',
+    result: result('JetBrains/junie-slack-bot-youtrack', NEW, [['triage', 'Triage a YouTrack ticket.']]),
+  });
+  await store.set(`junie-sre@${OLD}`, {
+    ref: 'main (default branch)',
+    result: result('JetBrains/junie-sre', OLD, [['incident', 'Open an incident for Slack.']]),
+  });
+  const server = createWebServer({ open: () => Promise.reject(new Error('offline')), store });
+  const base = await listen(server, 0);
+  t.after(() => server.close());
+  const search = async (q: string) => found((await (await fetch(`${base}/api/search?q=${encodeURIComponent(q)}`)).json()) as any);
+  assert.deepEqual(await search('junie-slack'), ['JetBrains/junie-slack-bot-youtrack triage']);
+  assert.deepEqual(await search('JETBRAINS/JUNIE-SRE'), ['JetBrains/junie-sre incident']);
+  assert.deepEqual(await search('junie'), ['JetBrains/junie-sre incident', 'JetBrains/junie-slack-bot-youtrack triage']);
+  // Every word, each in the name, the description or the repository.
+  assert.deepEqual(await search('junie slack'), ['JetBrains/junie-sre incident', 'JetBrains/junie-slack-bot-youtrack triage']);
+  assert.deepEqual(await search('junie-slack triage'), ['JetBrains/junie-slack-bot-youtrack triage']);
+  assert.deepEqual(await search('junie-slack incident'), []);
+  // A word does not span the repository and the name.
+  assert.deepEqual(await search('youtracktriage'), []);
+});
+
+test('/api/search: a repository matched, only its latest stored scan', async (t) => {
+  const { search } = await serve(t);
+  assert.deepEqual(found((await search('jetbrains/example')).body), ['JetBrains/example commits', 'JetBrains/example review']);
+  assert.deepEqual((await search('example old-only')).body, { results: [] });
+});
+
 test('/api/search: sorted by name, then repository, then path', async (t) => {
   const { search } = await serve(t);
   // Every skill of the latest scans has an "e": the order of them all.

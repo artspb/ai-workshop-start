@@ -1,16 +1,18 @@
 // The page's filter, in its own module so the tests can import it.
 
 /**
- * The skills whose name or description holds every word of the query, case-insensitive.
+ * The skills whose name or description holds every word of the query, case-insensitive; with
+ * `repository`, the search's `<owner>/<repo>`, a word may be in it too. A word does not span two.
  * @template {{ name: string, description: string }} T
  * @param {T[]} skills
  * @param {string} query
+ * @param {string} [repository]
  * @returns {T[]}
  */
-export function filterSkills(skills, query) {
+export function filterSkills(skills, query, repository = '') {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   return skills.filter((skill) => {
-    const text = `${skill.name}\n${skill.description}`.toLowerCase();
+    const text = `${skill.name}\n${skill.description}\n${repository}`.toLowerCase();
     return words.every((word) => text.includes(word));
   });
 }
