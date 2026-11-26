@@ -50,7 +50,8 @@ No finding without a check: what you cannot reproduce, leave out or ask as a **q
 - A changed `fixture/`: its case is in the table in `fixture/README.md`.
 - The web view: `GITHUB_TOKEN` stays in the server, never in a page or a response.
 - Only the scan store is written ([persistence](../../../spec/analysis.md#persistence)): GitHub scans listed through a tree,
-  by commit. Never a local directory or a code-search scan, and no other file.
+  by commit, and a code-search scan only when its list is exact for the commit, under its own key.
+  Never a local directory, and no other file.
 - No style nits the typecheck catches. See [AGENTS.md](../../../AGENTS.md) for the definition of done.
 
 ## 4. Write

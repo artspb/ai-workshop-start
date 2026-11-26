@@ -125,18 +125,22 @@ async function searchPaths(github: Client, id: string, sha: string): Promise<{ p
   const paths = new Set<string>(); // pages can repeat a result
   const refs = new Set<string>();
   let complete = true;
+  let total = 0;
   // GitHub returns at most 1000 results: ten pages.
   for (let page = 1; page <= 10; page++) {
     const result = await github.json<{ total_count: number; incomplete_results?: boolean; items: { path: string; url?: string }[] }>(
       `${API}/search/code?q=filename:SKILL.md+repo:${id}&per_page=100&page=${page}`,
     );
     if (result.incomplete_results || result.total_count > 1000) complete = false;
+    total = result.total_count;
     for (const item of result.items) {
       paths.add(item.path);
       refs.add(indexCommit(item.url));
     }
     if (result.items.length < 100 || page * 100 >= result.total_count) break;
   }
+  // Fewer paths than results: a repeated result pushed another out, or a page came short.
+  if (paths.size < Math.min(total, 1000)) complete = false;
   // No result names no commit; results naming different commits, or none, are not one listing.
   const [index] = refs;
   if (refs.size !== 1 || !index) return { paths: [...paths], exact: false };
@@ -160,13 +164,21 @@ const COMPARE_LIMIT = 300;
 
 /**
  * The search list of the index commit, made the head's: the `SKILL.md` files the commits since
- * added, removed or renamed. Undefined when the compare cannot be trusted: the index commit is not
- * an ancestor of the head, the compare may not list every file, or a `SKILL.md` changed otherwise.
+ * added, removed or renamed. Undefined when the compare cannot be trusted: it failed, the index
+ * commit is not an ancestor of the head, the compare may not list every file, or a `SKILL.md`
+ * changed otherwise.
  */
 async function catchUp(github: Client, id: string, index: string, head: string, paths: Set<string>): Promise<Set<string> | undefined> {
-  const compare = await github.json<{ status: string; files?: { filename: string; status: string; previous_filename?: string }[] }>(
-    `${API}/repos/${id}/compare/${index}...${head}`,
-  );
+  type Compare = { status: string; files?: { filename: string; status: string; previous_filename?: string }[] };
+  let compare: Compare;
+  try {
+    compare = await github.json<Compare>(`${API}/repos/${id}/compare/${index}...${head}`);
+  } catch (error) {
+    // GitHub no longer has the index commit (a force push: 404), or failed this one answer: the
+    // search list as it is. GitHub answering no more requests stops the scan, as anywhere else.
+    if (error instanceof GitHubUnavailable || !(error instanceof AtlasError)) throw error;
+    return undefined;
+  }
   const changed = compare.files ?? [];
   if (compare.status !== 'ahead' || changed.length >= COMPARE_LIMIT) return undefined;
   const isSkill = (path: string | undefined) => path !== undefined && (path === 'SKILL.md' || path.endsWith('/SKILL.md'));

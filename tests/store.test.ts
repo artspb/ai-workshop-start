@@ -173,8 +173,34 @@ function searched(head: string, items: { path: string }[], answer: object = {}, 
   };
 }
 
+/**
+ * As `searched`, its code search answering on two pages: 100 results, then 50 (`total_count: 150`);
+ * `answers` adds to each page's answer. Every path is read at `head`.
+ */
+function twoPages(head: string, items: { path: string }[], answers: [object, object] = [{}, {}]): Recording {
+  const page = (n: number, slice: { path: string }[], answer: object) => ({
+    [`${SEARCH}${n}`]: { status: 200, body: { total_count: 150, incomplete_results: false, items: slice, ...answer } },
+  });
+  const raws = Object.fromEntries(
+    [...new Set(items.map((entry) => entry.path))].map((path) => [
+      `https://raw.githubusercontent.com/JetBrains/example/${head}/${path}`,
+      { status: 200, body: skill(path.split('/').at(-2) ?? 'root') },
+    ]),
+  );
+  return {
+    ...github(head, { large: true }),
+    ...raws,
+    ...page(1, items.slice(0, 100), answers[0]),
+    ...page(2, items.slice(100), answers[1]),
+  };
+}
+
+/** 150 skills, `.agents/skills/s<i>/SKILL.md`, each result naming `ref`; `ref2` for page 2. */
+const skills150 = (ref: string, ref2 = ref) =>
+  Array.from({ length: 150 }, (_, i) => item(`.agents/skills/s${i}/SKILL.md`, i < 100 ? ref : ref2));
+
 /** `skill-atlas scan` of the default branch with a token, GitHub answering from the recording. */
-async function scanSearched(recording: Recording, directory: string) {
+async function scanSearched(recording: Recording, directory: string, expected = 0) {
   const requests: string[] = [];
   const recorded = replay(recording);
   const fetch = (url: string) => (requests.push(url), recorded(url));
@@ -187,7 +213,7 @@ async function scanSearched(recording: Recording, directory: string) {
     error: (text) => stderr.push(text),
     serve: () => Promise.reject(new Error('not served')),
   });
-  assert.equal(code, 0, stderr.join('\n'));
+  assert.equal(code, expected, stderr.join('\n'));
   return { stdout: stdout.join('\n'), stderr: stderr.join('\n'), requests };
 }
 
@@ -260,6 +286,12 @@ test('code search not exact for the commit: not stored, scanned every time', asy
     ['a result naming no commit', searched(MAIN, [item(SKILL, MAIN), { path: '.agents/skills/x/SKILL.md' }])],
     ['incomplete results', searched(MAIN, [item(SKILL, MAIN)], { incomplete_results: true })],
     ['more than 1000 results', searched(MAIN, [item(SKILL, MAIN)], { total_count: 1001 })],
+    ['fewer paths than total_count', searched(MAIN, [item(SKILL, MAIN)], { total_count: 2 })],
+    ['two pages repeating one path', twoPages(MAIN, Array.from({ length: 150 }, () => item(SKILL, MAIN)))],
+    ['incomplete results only on page 2', twoPages(MAIN, skills150(MAIN), [{}, { incomplete_results: true }])],
+    ['page 2 naming another commit', twoPages(MAIN, skills150(MAIN, NEXT))],
+    ['a compare answering 404', { ...lagging(), [COMPARE]: { status: 404, body: { message: 'Not Found' } } }],
+    ['a compare answering 500', { ...lagging(), [COMPARE]: { status: 500, body: { message: 'Server Error' } } }],
     ['a compare not ahead', lagging({ status: 'diverged' })],
     ['a compare too large', lagging({ files: many })],
     ['a SKILL.md changed otherwise', lagging({ files: [{ filename: SKILL, status: 'changed' }] })],
@@ -272,6 +304,32 @@ test('code search not exact for the commit: not stored, scanned every time', asy
     }
     assert.deepEqual(readdirSync(directory), [], name);
   }
+});
+
+test('code search on two pages, every result naming the resolved commit: stored, the next scan only resolves', async (t) => {
+  const directory = storeDirectory(t);
+  const recording = twoPages(MAIN, skills150(MAIN));
+  const first = await scanSearched(recording, directory);
+  assert.ok(first.requests.includes(`${SEARCH}2`));
+  assert.equal([...first.stdout.matchAll(/^s\d+ — /gm)].length, 150);
+  assert.equal(readdirSync(directory).length, 1);
+  const again = await scanSearched(recording, directory);
+  assert.deepEqual(again.requests, RESOLVE);
+  assert.equal(again.stdout, first.stdout);
+});
+
+test('code search, a compare that fails: the search list as it is, the scan goes on; a rate limit stops it', async (t) => {
+  for (const status of [404, 500]) {
+    const directory = storeDirectory(t);
+    const scanned = await scanSearched({ ...lagging(), [COMPARE]: { status, body: { message: 'Not Found' } } }, directory);
+    assert.ok(scanned.requests.includes(COMPARE), `${status}`);
+    assert.doesNotMatch(scanned.stdout, /^new — /m, `${status}`);
+    assert.match(scanned.stdout, /^before — /m, `${status}`);
+    assert.deepEqual(readdirSync(directory), [], `${status}`);
+  }
+  const limited = { ...lagging(), [COMPARE]: { status: 403, body: { message: 'API rate limit exceeded' } } };
+  const stopped = await scanSearched(limited, storeDirectory(t), 1);
+  assert.match(stopped.stderr, /rate limit/);
 });
 
 test('code search, the index behind the head: a skill added since is found, even when the scan is not stored', async (t) => {
