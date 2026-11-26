@@ -69,9 +69,12 @@ gh api repos/{owner}/{repo}/pulls/<n>/reviews --method POST --input review.json
 }
 ```
 - `event`: `REQUEST_CHANGES` with a **blocking** comment, else `COMMENT`. Never `APPROVE`: merging is a person's call.
-- On your own pull request, GitHub rejects `REQUEST_CHANGES` with a 422 and the whole review is lost. If the post returns 422,
-  post the same review again with `"event": "COMMENT"`; the **blocking** labels and the summary's verdict still say what blocks.
-  Don't look the author up first: `gh api user` gives no answer for a GitHub App token (403).
+- A 422 rejects the whole review; read its `errors` and post again:
+  - `REQUEST_CHANGES` on your own pull request: post the same review with `"event": "COMMENT"`;
+    the **blocking** labels and the summary's verdict still say what blocks.
+    Don't look the author up first: `gh api user` gives no answer for a GitHub App token (403).
+  - `Line could not be resolved`: a comment is on a line outside the diff, and the error does not say which.
+    Check each comment's line against `gh pr diff <n>` and move those outside it into the summary, as `path:line`.
 - `line` is the line in the new file; a range adds `start_line`.
 
 ## Example
