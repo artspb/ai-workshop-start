@@ -1,0 +1,192 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "id": "PR_kwDOV8tIdc8AAAABSJqwSw",
+        "number": 57,
+        "state": "MERGED",
+        "isDraft": false,
+        "isCrossRepository": false,
+        "author": {
+          "login": "jetbrains-air",
+          "__typename": "Bot"
+        },
+        "baseRefName": "main",
+        "headRefName": "issue-56-organization-request-budget",
+        "headRefOid": "a939681506446a7be47d3cd6e73c550bc84484a1",
+        "mergeable": "UNKNOWN",
+        "mergeStateStatus": "UNKNOWN",
+        "head": {
+          "nodes": [
+            {
+              "commit": {
+                "oid": "a939681506446a7be47d3cd6e73c550bc84484a1",
+                "statusCheckRollup": {
+                  "state": "SUCCESS",
+                  "contexts": {
+                    "nodes": [
+                      {
+                        "__typename": "CheckRun",
+                        "name": "test",
+                        "status": "COMPLETED",
+                        "conclusion": "SUCCESS",
+                        "checkSuite": {
+                          "workflowRun": {
+                            "workflow": {
+                              "name": "CI"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "__typename": "CheckRun",
+                        "name": "test",
+                        "status": "COMPLETED",
+                        "conclusion": "SUCCESS",
+                        "checkSuite": {
+                          "workflowRun": {
+                            "workflow": {
+                              "name": "CI"
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "commits": {
+          "totalCount": 2,
+          "nodes": [
+            {
+              "commit": {
+                "messageHeadline": "Organization scan: no repository lookup, the default branches' commit…"
+              }
+            },
+            {
+              "commit": {
+                "messageHeadline": "Address review: a test for GitHub unreachable on a GraphQL query"
+              }
+            }
+          ]
+        },
+        "comments": {
+          "nodes": [
+            {
+              "author": {
+                "login": "jetbrains-air",
+                "__typename": "Bot"
+              },
+              "body": "Merged with rebase: Code Review https://github.com/artspb/ai-workshop-start/pull/57#pullrequestreview-6077059626 found nothing on a939681, and every thread was resolved.",
+              "createdAt": "2026-11-26T15:52:10Z"
+            }
+          ]
+        },
+        "reviews": {
+          "nodes": [
+            {
+              "id": "PRR_kwDOV8tIdc8AAAABajgxsQ",
+              "databaseId": 6077034929,
+              "author": {
+                "login": "jetbrains-air",
+                "__typename": "Bot"
+              },
+              "state": "COMMENTED",
+              "viewerDidAuthor": true,
+              "body": "Nothing blocks the merge. The change matches the issue and `spec/analysis.md`: typecheck and `npm test` (140) pass in a clean environment, CI is green, and the GraphQL failure paths I probed (unreachable, `200` without `data`, a non-JSON `200`, a `403` that is not the rate limit) behave as the spec says; the query shape and a not-found repository answer as assumed on live GitHub. The main risk is small: one spec case, GitHub unreachable on a GraphQL query, has no test (inline).\n\nProduced by Air Automations. Name: 2. Code Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/8d0ab705-e1d8-4895-bf56-42b1c943eb46?run=b4305bb5-f0eb-4fc9-99a8-964b71474be6",
+              "submittedAt": "2026-11-26T15:49:27Z",
+              "commit": {
+                "oid": "175a26fab81ee6d67e1f6c51574607ebf11c503c"
+              },
+              "comments": {
+                "nodes": [
+                  {
+                    "replyTo": null
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRR_kwDOV8tIdc8AAAABajhqnw",
+              "databaseId": 6077049503,
+              "author": {
+                "login": "jetbrains-air",
+                "__typename": "Bot"
+              },
+              "state": "COMMENTED",
+              "viewerDidAuthor": true,
+              "body": "Round 1: the missing spec case, GitHub unreachable on a GraphQL query, now has a test (a939681). The review body has no finding of its own.\n\nProduced by Air Automations. Name: 3. Address Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/c1da6cbb-a56d-4b33-9d9b-bbbe0ad87586?run=4a140533-abc0-41f2-a81e-1e79e59cf06c\n\n<!-- address-review answers:6077034929 -->",
+              "submittedAt": "2026-11-26T15:50:39Z",
+              "commit": {
+                "oid": "a939681506446a7be47d3cd6e73c550bc84484a1"
+              },
+              "comments": {
+                "nodes": [
+                  {
+                    "replyTo": {
+                      "id": "PRRC_kwDOV8tIdc8AAAABGMczFg"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRR_kwDOV8tIdc8AAAABajiSKg",
+              "databaseId": 6077059626,
+              "author": {
+                "login": "jetbrains-air",
+                "__typename": "Bot"
+              },
+              "state": "COMMENTED",
+              "viewerDidAuthor": true,
+              "body": "Nothing blocks the merge. The one earlier finding is fixed in a939681 and its thread is resolved: the spec case \"GitHub unreachable on a GraphQL query\" now has a test, which passes and fails when an unreachable query is treated as a failed one. The push adds only that test; typecheck and `npm test` (141) pass in a clean environment and CI is green. No new findings, no thread stays open.\n\nProduced by Air Automations. Name: 2. Code Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/8d0ab705-e1d8-4895-bf56-42b1c943eb46?run=4ee76f0f-13cd-4a5a-88eb-aad91b72c96f",
+              "submittedAt": "2026-11-26T15:51:22Z",
+              "commit": {
+                "oid": "a939681506446a7be47d3cd6e73c550bc84484a1"
+              },
+              "comments": {
+                "nodes": []
+              }
+            }
+          ]
+        },
+        "reviewThreads": {
+          "nodes": [
+            {
+              "id": "PRRT_kwDOV8tIdc68dr76",
+              "isResolved": true,
+              "isOutdated": false,
+              "path": "tests/organization.test.ts",
+              "line": 780,
+              "comments": {
+                "nodes": [
+                  {
+                    "databaseId": 4710675222,
+                    "author": {
+                      "login": "jetbrains-air",
+                      "__typename": "Bot"
+                    },
+                    "body": "**suggestion** The spec lists four refusals of a GraphQL query that stop the scan (`spec/analysis.md:48`: the rate limit, `RATE_LIMITED`, a rejected token, *GitHub unreachable*), and this test covers three: unreachable has none.\n\nHow to reproduce: `grep -n unreachable tests/organization.test.ts` finds only the tests that remove a repository's tree from the recording; no test fails the `/graphql` request itself. The behaviour is right today. With a fetch that rejects for `https://api.github.com/graphql` (`Promise.reject(new TypeError('fetch failed'))`) and answers the rest from a recording, `scan github.com/Big` with a token gives:\n```\nexit code 1\nstderr: Cannot reach GitHub: fetch failed\nasked:  /users/Big, the list page, /graphql   (no commit, no tree request)\n```\nA fourth case asserting exactly that would hold it, as AGENTS.md asks (a test for every case in the spec). `scanBig` takes a recording only, so it needs a fetch of its own, like the failed-query test above.\n\nProduced by Air Automations. Name: 2. Code Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/8d0ab705-e1d8-4895-bf56-42b1c943eb46?run=b4305bb5-f0eb-4fc9-99a8-964b71474be6",
+                    "createdAt": "2026-11-26T15:49:27Z"
+                  },
+                  {
+                    "databaseId": 4710687476,
+                    "author": {
+                      "login": "jetbrains-air",
+                      "__typename": "Bot"
+                    },
+                    "body": "Fixed in a939681: a fourth case, `GitHub unreachable on a GraphQL query → the scan stops, exit code 1, no repository scanned` in `tests/organization.test.ts`. Its fetch rejects `/graphql` with `TypeError('fetch failed')` and answers the rest from `bigRecording()`; it asserts exit code 1, no stdout, stderr exactly `Cannot reach GitHub: fetch failed`, and the requests exactly `/users/Big`, the 3 list pages and one `/graphql` (no commit, no tree). It passes, with `npm run typecheck` and `npm test` (141) in a clean environment.\n\nProduced by Air Automations. Name: 3. Address Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/c1da6cbb-a56d-4b33-9d9b-bbbe0ad87586?run=4a140533-abc0-41f2-a81e-1e79e59cf06c\n\n<!-- address-review -->",
+                    "createdAt": "2026-11-26T15:50:38Z"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

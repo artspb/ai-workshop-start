@@ -1,0 +1,285 @@
+# The gate of the review automations (spec/automations.md): on every new head and every submitted review, read the
+# pull request once and decide, with the rules the skills use (scripts/decide.jq). Merge or bring the branch up to
+# date here, without an agent; start an Air automation (its webhook) only when there is work for one.
+# The pull request's code never runs with a secret: the decision checks out main, not the pull request, and the
+# rebase is tested in a job of its own, without a write token; the push job runs git only.
+name: Automations
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  pull_request_review:
+    types: [submitted]
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: The pull request's number
+        required: true
+        type: number
+permissions:
+  contents: read
+# One run at a time per pull request and kind of event: a review never replaces a waiting new head.
+concurrency:
+  group: automations-${{ github.event.pull_request.number || inputs.pull_request }}-${{ github.event_name }}
+  cancel-in-progress: false
+env:
+  N: ${{ github.event.pull_request.number || inputs.pull_request }}
+  RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+jobs:
+  decide:
+    name: "automations: decide"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+      statuses: read
+      actions: read
+    outputs:
+      decision: ${{ steps.decide.outputs.decision }}
+      start: ${{ steps.decide.outputs.start }}
+      reason: ${{ steps.decide.outputs.reason }}
+      head: ${{ steps.decide.outputs.head }}
+      head_ref: ${{ steps.decide.outputs.head_ref }}
+      base: ${{ steps.decide.outputs.base }}
+      base_sha: ${{ steps.decide.outputs.base_sha }}
+      behind: ${{ steps.decide.outputs.behind }}
+      review: ${{ steps.decide.outputs.review }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Decide
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          REVIEW: ${{ github.event.review.id }}
+        run: |
+          # A completed review waits for the checks and for GitHub's merge state: up to 45 reads, 20 seconds apart.
+          TRIES=45 scripts/decide.sh "$N" "$EVENT" "$ACTION" "$REVIEW" > decision.json
+          jq -r --arg ref "$(jq -r .data.repository.pullRequest.headRefName pr.json)" \
+            '"decision=\(.decision)", "start=\(.start | tojson)", "reason=\(.reason)", "head=\(.head)", "head_ref=\($ref)",
+             "base=\(.base)", "base_sha=\(.base_sha)", "behind=\(.behind // "")", "review=\(.review // "")"' decision.json >> "$GITHUB_OUTPUT"
+          names='{"code-review": "Code Review", "address-review": "Address Review", "merge-when-reviewed": "Merge Reviewed"}'
+          jq -r --argjson names "$names" '"#\(.pull_request): " + (if .decision == "start" then "start \(.start | map($names[.]) | join(" and "))"
+            elif .decision == "rebase" then "bring up to date" else .decision end) + ": \(.reason)"' decision.json | tee -a "$GITHUB_STEP_SUMMARY"
+
+  merge:
+    name: "automations: merge"
+    needs: decide
+    if: needs.decide.outputs.decision == 'merge'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+      checks: read
+      statuses: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD: ${{ needs.decide.outputs.head }}
+          REVIEW: ${{ needs.decide.outputs.review }}
+        run: |
+          # Read again right before merging: a review may have arrived meanwhile.
+          TRIES=10 scripts/decide.sh "$N" workflow_dispatch "" > decision.json
+          if [ "$(jq -r '.decision + " " + .head' decision.json)" != "merge $HEAD" ]; then
+            echo "Not merged: $(jq -r .reason decision.json)" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          # --match-head-commit refuses a head that moved since the review.
+          gh pr merge "$N" -R "$GITHUB_REPOSITORY" --rebase --delete-branch --match-head-commit "$HEAD" || true
+          if [ "$(gh pr view "$N" -R "$GITHUB_REPOSITORY" --json state --jq .state)" != MERGED ]; then
+            echo "Not merged: GitHub refused the merge of ${HEAD:0:7}" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          gh pr comment "$N" -R "$GITHUB_REPOSITORY" --body "Merged with rebase: Code Review $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/pull/$N#pullrequestreview-$REVIEW found nothing on ${HEAD:0:7}, and every thread was resolved.
+
+          Automations workflow: $RUN"
+          echo "Merged ${HEAD:0:7}" >> "$GITHUB_STEP_SUMMARY"
+
+  # The rebase, tested: the pull request's code runs here, so this job has no write token and no secret.
+  verify:
+    name: "automations: verify the rebase"
+    needs: decide
+    if: needs.decide.outputs.decision == 'rebase'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      result: ${{ steps.rebase.outputs.result == 'rebased' && steps.verify.outputs.result || steps.rebase.outputs.result }}
+      new_head: ${{ steps.rebase.outputs.new_head }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Rebase
+        id: rebase
+        env:
+          REF: ${{ needs.decide.outputs.head_ref }}
+          HEAD: ${{ needs.decide.outputs.head }}
+          BASE_SHA: ${{ needs.decide.outputs.base_sha }}
+        run: |
+          code=0; new_head=$(scripts/rebase.sh "$REF" "$HEAD" "$BASE_SHA") || code=$?
+          case $code in
+            0) echo "result=rebased" >> "$GITHUB_OUTPUT"; echo "new_head=$new_head" >> "$GITHUB_OUTPUT" ;;
+            2) echo "result=conflict" >> "$GITHUB_OUTPUT" ;;
+            3) echo "result=moved" >> "$GITHUB_OUTPUT" ;;
+            *) exit "$code" ;;
+          esac
+      - uses: actions/setup-node@v7
+        if: steps.rebase.outputs.result == 'rebased'
+        with:
+          node-version: 24
+      - name: Verify
+        id: verify
+        if: steps.rebase.outputs.result == 'rebased'
+        run: |
+          # The verification the skill runs: install, typecheck, tests, smoke scan. CI runs npm run e2e on the push.
+          failed=""
+          env -i PATH="$PATH" HOME="$(mktemp -d)" npm ci || failed="npm ci"
+          [ -n "$failed" ] || env -i PATH="$PATH" HOME="$(mktemp -d)" npm run typecheck || failed="the typecheck"
+          [ -n "$failed" ] || env -i PATH="$PATH" HOME="$(mktemp -d)" npm test || failed="the tests"
+          [ -n "$failed" ] || env -i PATH="$PATH" HOME="$(mktemp -d)" ./skill-atlas scan ./fixture || failed="the smoke scan"
+          echo "result=${failed:+failed: }${failed:-verified}" >> "$GITHUB_OUTPUT"
+
+  # The tested rebase, pushed: made again with git only, it must be the very commit the verify job tested.
+  push:
+    name: "automations: push the rebase"
+    needs: [decide, verify]
+    if: needs.verify.outputs.result == 'verified'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+      checks: read
+      statuses: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Push
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ needs.decide.outputs.head_ref }}
+          HEAD: ${{ needs.decide.outputs.head }}
+          BASE: ${{ needs.decide.outputs.base }}
+          BASE_SHA: ${{ needs.decide.outputs.base_sha }}
+          BEHIND: ${{ needs.decide.outputs.behind }}
+          REVIEW: ${{ needs.decide.outputs.review }}
+          TESTED: ${{ needs.verify.outputs.new_head }}
+          AIR_WEBHOOK_CODE_REVIEW: ${{ secrets.AIR_WEBHOOK_CODE_REVIEW }}
+          AIR_WEBHOOK_MERGE: ${{ secrets.AIR_WEBHOOK_MERGE }}
+        run: |
+          post() { # <secret's value> <name> <reason>: start an Air automation
+            if [ -z "$1" ]; then echo "::warning::$2 not started: its webhook secret is not set"; return; fi
+            jq -n --argjson n "$N" --arg reason "$3" '{ pull_request: $n, reason: $reason }' \
+              | curl -fsS --retry 3 -X POST -H 'Content-Type: application/json' --data @- "$1" > /dev/null
+            echo "Started $2: $3" >> "$GITHUB_STEP_SUMMARY"
+          }
+          # Read again right before pushing: checks 1-5 must still hold on the reviewed head.
+          TRIES=10 scripts/decide.sh "$N" workflow_dispatch "" > decision.json
+          if [ "$(jq -r '.decision + " " + .head' decision.json)" != "rebase $HEAD" ]; then
+            echo "Not pushed: $(jq -r .reason decision.json)" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          new_head=$(scripts/rebase.sh "$REF" "$HEAD" "$BASE_SHA")
+          if [ "$new_head" != "$TESTED" ]; then
+            echo "Not pushed: the rebase made $new_head, not the tested $TESTED" | tee -a "$GITHUB_STEP_SUMMARY"; exit 1
+          fi
+          # The lease is the reviewed head: a push someone made meanwhile is refused, never overwritten.
+          if ! git push --force-with-lease="$REF:$HEAD" "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY.git" "HEAD:refs/heads/$REF"; then
+            echo "Not pushed: the push of ${new_head:0:7} was refused" | tee -a "$GITHUB_STEP_SUMMARY"
+            # Refused with the branch still on the reviewed head: not the lease, but this token, which may not push a
+            # change to .github/workflows. Merge Reviewed, with its own token, brings it up to date instead.
+            git fetch -q origin "+refs/heads/$REF:refs/remotes/origin/$REF"
+            [ "$(git rev-parse "refs/remotes/origin/$REF")" != "$HEAD" ] \
+              || post "$AIR_WEBHOOK_MERGE" "Merge Reviewed" "the review of ${HEAD:0:7} is completed and it is $BEHIND commits behind $BASE, but the workflow's token may not push its rebase"
+            exit 0
+          fi
+          gh pr comment "$N" -R "$GITHUB_REPOSITORY" --body "Rebased onto $BASE (${BASE_SHA:0:7}): Code Review $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/pull/$N#pullrequestreview-$REVIEW found nothing on ${HEAD:0:7}, but it was $BEHIND commits behind. It applied cleanly and passes the typecheck, the tests and the smoke scan. To re-review the rebase, compare \`git range-diff $BASE_SHA $HEAD $new_head\`, not \`git diff $HEAD..$new_head\`, which shows only what $BASE gained. Not merged: the new head waits for its review.
+
+          Automations workflow: $RUN"
+          # A push with this workflow's token starts no workflow: run CI on the new head, and start Code Review, here.
+          gh workflow run ci.yml -R "$GITHUB_REPOSITORY" --ref "$REF" || echo "::warning::CI not started on ${new_head:0:7}"
+          echo "Pushed ${new_head:0:7}, the rebase of ${HEAD:0:7} onto ${BASE_SHA:0:7}" >> "$GITHUB_STEP_SUMMARY"
+          post "$AIR_WEBHOOK_CODE_REVIEW" "Code Review" "a new head, ${new_head:0:7}: the rebase of ${HEAD:0:7} onto $BASE (${BASE_SHA:0:7}), for Code Review's light check"
+
+  # The rebase applied but fails the verification: fixing that is a change nobody reviewed. Leave it for a person, once.
+  hand-over:
+    name: "automations: hand over"
+    needs: [decide, verify]
+    if: startsWith(needs.verify.outputs.result, 'failed')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD: ${{ needs.decide.outputs.head }}
+          BASE: ${{ needs.decide.outputs.base }}
+          BASE_SHA: ${{ needs.decide.outputs.base_sha }}
+          RESULT: ${{ needs.verify.outputs.result }}
+        run: |
+          # The owner, from AGENTS.md's Owner section, the one place it is written.
+          owner=$(sed -n '/^## Owner/,/^## /p' AGENTS.md | grep -o '`@[A-Za-z0-9-]*`' | head -1 | tr -d '`')
+          check=${RESULT#failed: }
+          gh pr comment "$N" -R "$GITHUB_REPOSITORY" --body "Not rebased: ${HEAD:0:7} fails $check once rebased onto $BASE (${BASE_SHA:0:7}). It applies cleanly, but it breaks with what $BASE gained, and fixing that is a change nobody reviewed: $RUN. For a person to resolve.
+
+          $owner: fix the pull request on top of $BASE? Push a fix and Code Review reviews it, or close the pull request and nothing of it merges.
+
+          <!-- merge-when-reviewed conflict:$HEAD -->"
+          echo "Not rebased: ${HEAD:0:7} fails $check; handed over to $owner" >> "$GITHUB_STEP_SUMMARY"
+
+  # Start the Air automations the decision names, or Merge Reviewed for a rebase that conflicts.
+  start:
+    name: "automations: start"
+    needs: [decide, verify]
+    if: always() && (needs.decide.outputs.decision == 'start' || needs.verify.outputs.result == 'conflict')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Start
+        env:
+          START: ${{ needs.verify.outputs.result == 'conflict' && '["merge-when-reviewed"]' || needs.decide.outputs.start }}
+          REASON: ${{ needs.verify.outputs.result == 'conflict' && format('the review of {0} is completed, but its rebase onto {1} conflicts; Merge Reviewed resolves it', needs.decide.outputs.head, needs.decide.outputs.base) || needs.decide.outputs.reason }}
+          AIR_WEBHOOK_CODE_REVIEW: ${{ secrets.AIR_WEBHOOK_CODE_REVIEW }}
+          AIR_WEBHOOK_ADDRESS_REVIEW: ${{ secrets.AIR_WEBHOOK_ADDRESS_REVIEW }}
+          AIR_WEBHOOK_MERGE: ${{ secrets.AIR_WEBHOOK_MERGE }}
+        run: |
+          for automation in $(echo "$START" | jq -r '.[]'); do
+            case $automation in
+              code-review) secret=AIR_WEBHOOK_CODE_REVIEW name="Code Review" ;;
+              address-review) secret=AIR_WEBHOOK_ADDRESS_REVIEW name="Address Review" ;;
+              merge-when-reviewed) secret=AIR_WEBHOOK_MERGE name="Merge Reviewed" ;;
+              *) echo "::error::No such automation: $automation"; exit 1 ;;
+            esac
+            url=$(printenv "$secret" || true)
+            if [ -z "$url" ]; then
+              echo "::warning::$name not started: $secret is not set"; echo "$name not started: $secret is not set" >> "$GITHUB_STEP_SUMMARY"; continue
+            fi
+            jq -n --argjson n "$N" --arg reason "$REASON" '{ pull_request: $n, reason: $reason }' \
+              | curl -fsS --retry 3 -X POST -H 'Content-Type: application/json' --data @- "$url" > /dev/null
+            echo "Started $name: $REASON" >> "$GITHUB_STEP_SUMMARY"
+          done

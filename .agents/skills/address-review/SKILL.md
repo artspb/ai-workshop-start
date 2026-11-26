@@ -5,7 +5,9 @@ description: Address the review comments on a GitHub pull request in this reposi
 
 # Address review
 
-The pull request is the one the event names, or the one you were asked about.
+The pull request is the one the event names, the `pull_request` of the webhook that started you, or the one you
+were asked about. The Automations workflow ([spec/automations.md](../../../spec/automations.md)) starts this skill
+with `{ pull_request: <number>, reason: <one line> }`: the `reason` says why, and section 0 still decides.
 Every comment gets an answer: **Fixed in `<sha>`**, **Not changed**, or an answer to a question.
 You change the branch, never merge it: merge-when-reviewed merges an Air bot's pull request once Code Review finds
 nothing on the head and every thread is resolved; a person merges every other one.
@@ -43,16 +45,12 @@ This skill runs on every submitted review, and your own round is a review too. S
   Only those: a thread your round answered waits for Code Review's re-review, which resolves it or asks the owner in
   its "stays open" reply (code-review, section 4). So round 3's own submit, with nothing unanswered, posts nothing.
 
+One query, the one the Automations workflow reads too, from the checkout before `gh pr checkout`:
 ```sh
-gh api graphql -F owner='{owner}' -F repo='{repo}' -F n=<n> -f query='
-  query($owner: String!, $repo: String!, $n: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $n) {
-    id state isDraft isCrossRepository headRefName headRefOid comments(last: 50) { nodes { body } }
-    reviews(last: 50) { nodes { id databaseId author { login } state viewerDidAuthor body } }
-    reviewThreads(first: 100) { nodes { id isResolved isOutdated path line
-      comments(first: 50) { nodes { databaseId author { login } body createdAt } } } } } } }'
-gh pr view <n> --json commits --jq '[.commits[].messageHeadline | select(startswith("Address review"))] | length'
+gh api graphql -F owner='{owner}' -F repo='{repo}' -F n=<n> -f query="$(cat scripts/pull-request.graphql)" > pr.json
 ```
-The count reads the pull request, not the checkout: an Air checkout is shallow, without `origin/main`.
+`rounds` counts the commits starting with `Address review` (below): it reads the pull request, not the checkout,
+since an Air checkout is shallow, without `origin/main`.
 
 **Unanswered** is:
 - a **thread** that is not resolved and whose last comment has no marker line, neither yours nor Code Review's
@@ -61,11 +59,11 @@ The count reads the pull request, not the checkout: an Air checkout is shallow, 
 - a **review body** with findings, a `path:line` outside the diff or a request, that has no marker line and
   whose `databaseId` no `answers:` marker names. A body with no finding ("nothing blocks") needs no answer.
 
+`scripts/unanswered.jq` lists them, the rules the Automations workflow decides with (`scripts/review.jq`): `threads`,
+`bodies` (a body with no finding is one that starts with `Nothing blocks` and has no label), `rounds`, and `stopped`
+(the 3-round line is posted):
 ```sh
-OPEN='(?m)^<!-- code-review: stays open -->\s*$'
-jq --arg m "$MARK" --arg o "$OPEN" 'def code: gsub("(?m)^ {0,3}(`{3,}|~{3,})[^\\n]*\\n[\\s\\S]*?(^ {0,3}\\1[`~]*[ \\t]*\\r?$|\\z)"; "");
-  .data.repository.pullRequest.reviewThreads.nodes[]
-  | select((.isResolved | not) and (.comments.nodes[-1].body | code | test($m) or test($o) | not))' pr.json
+jq -f scripts/unanswered.jq pr.json
 ```
 Use `jq` itself (`.air/cloud/startup.sh` installs it; where it did not run: `command -v jq || { sudo apt-get update && sudo apt-get install -y jq; }`):
 `gh --jq` has no backreferences and rejects the pattern.

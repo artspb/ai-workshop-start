@@ -1,0 +1,13 @@
+# The pull request, as the review automations read it: one query, for the skills and for .github/workflows/automations.yml.
+# gh api graphql -F owner='{owner}' -F repo='{repo}' -F n=<n> -f query="$(cat scripts/pull-request.graphql)" > pr.json
+query($owner: String!, $repo: String!, $n: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $n) {
+  id number state isDraft isCrossRepository author { login __typename } baseRefName headRefName headRefOid mergeable mergeStateStatus
+  head: commits(last: 1) { nodes { commit { oid statusCheckRollup { state contexts(first: 100) { nodes { __typename
+    ... on CheckRun { name status conclusion checkSuite { workflowRun { workflow { name } } } }
+    ... on StatusContext { context state } } } } } } }
+  commits(last: 100) { totalCount nodes { commit { messageHeadline } } }
+  comments(last: 100) { nodes { author { login __typename } body createdAt } }
+  reviews(last: 100) { nodes { id databaseId author { login __typename } state viewerDidAuthor body submittedAt commit { oid }
+    comments(first: 100) { nodes { replyTo { id } } } } }
+  reviewThreads(first: 100) { nodes { id isResolved isOutdated path line
+    comments(first: 50) { nodes { databaseId author { login __typename } body createdAt } } } } } } }

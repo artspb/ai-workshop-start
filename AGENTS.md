@@ -30,3 +30,14 @@ A skill doesn't install these again, but keeps a one-line fallback for where the
 - `npm run e2e`: the end-to-end tests, on live GitHub; `UPDATE=1` rewrites `tests/e2e/*.txt`. Set `GITHUB_TOKEN`.
   Then the web view's visual tests: their report, with a video of each, in `playwright-report/` (`npx playwright show-report`)
 - `npm run e2e:update`: accepts the web view's new screenshots, on Linux only (see Screenshots)
+
+## Automations
+[.github/workflows/automations.yml](.github/workflows/automations.yml) decides on every new head and submitted review
+([spec/automations.md](spec/automations.md)), and starts an Air automation through its webhook. Each repository secret
+is the webhook's URL, its token included:
+- `AIR_WEBHOOK_CODE_REVIEW`: Code Review (`code-review`)
+- `AIR_WEBHOOK_ADDRESS_REVIEW`: Address Review (`address-review`)
+- `AIR_WEBHOOK_MERGE`: Merge Reviewed (`merge-when-reviewed`)
+
+The switch, in Air, once the workflow is on `main`: give each automation a webhook trigger, put its URL in the secret,
+then remove its GitHub event trigger. Until then both start it: the skills work started by either.

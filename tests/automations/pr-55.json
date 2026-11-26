@@ -1,0 +1,215 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "id": "PR_kwDOV8tIdc8AAAABSJgn0w",
+        "number": 55,
+        "state": "OPEN",
+        "isDraft": false,
+        "isCrossRepository": false,
+        "author": {
+          "login": "jetbrains-air",
+          "__typename": "Bot"
+        },
+        "baseRefName": "main",
+        "headRefName": "issue-52-visual-tests",
+        "headRefOid": "8f2be7ddf1f28c8383c52987d0617edfee0449c6",
+        "mergeable": "MERGEABLE",
+        "mergeStateStatus": "UNSTABLE",
+        "head": {
+          "nodes": [
+            {
+              "commit": {
+                "oid": "8f2be7ddf1f28c8383c52987d0617edfee0449c6",
+                "statusCheckRollup": {
+                  "state": "PENDING",
+                  "contexts": {
+                    "nodes": [
+                      {
+                        "__typename": "CheckRun",
+                        "name": "test",
+                        "status": "IN_PROGRESS",
+                        "conclusion": null,
+                        "checkSuite": {
+                          "workflowRun": {
+                            "workflow": {
+                              "name": "CI"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "__typename": "CheckRun",
+                        "name": "test",
+                        "status": "COMPLETED",
+                        "conclusion": "SUCCESS",
+                        "checkSuite": {
+                          "workflowRun": {
+                            "workflow": {
+                              "name": "CI"
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "commits": {
+          "totalCount": 5,
+          "nodes": [
+            {
+              "commit": {
+                "messageHeadline": "Visual tests of the web view on CI: Playwright screenshots against ba…"
+              }
+            },
+            {
+              "commit": {
+                "messageHeadline": "Accept new screenshots: the first baselines of the visual tests"
+              }
+            },
+            {
+              "commit": {
+                "messageHeadline": "Throwaway: one CSS colour changed, to show the visual tests fail (rev…"
+              }
+            },
+            {
+              "commit": {
+                "messageHeadline": "Revert the throwaway CSS colour change: the visual tests failed on it…"
+              }
+            },
+            {
+              "commit": {
+                "messageHeadline": "Address review: test that npm run e2e:update refuses to run off Linux"
+              }
+            }
+          ]
+        },
+        "comments": {
+          "nodes": [
+            {
+              "author": {
+                "login": "jetbrains-air",
+                "__typename": "Bot"
+              },
+              "body": "Rebased onto main (9c01e86): Code Review [found nothing](https://github.com/artspb/ai-workshop-start/pull/55#pullrequestreview-6076969901) on 7b2276c, but it was 2 commits behind and conflicted with #50 in AGENTS.md (both added a section: Owner, Screenshots). Both sections are kept. It passes the typecheck, the tests (137) and the smoke scan. To re-review the rebase, compare `git range-diff 9c01e86 7b2276c 4d0747e`, not `git diff 7b2276c..4d0747e`, which shows only what main gained. Not merged: the new head (4d0747e) waits for its review; the platform pushes it to the branch when this run ends.\n\nProduced by Air Automations. Name: 4. Merge Reviewed / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/1a688c3e-61d6-4269-b253-f1ddec8c719d?run=ba705c6a-5900-4598-897d-67c7548ad57a",
+              "createdAt": "2026-11-26T15:45:23Z"
+            },
+            {
+              "author": {
+                "login": "jetbrains-air",
+                "__typename": "Bot"
+              },
+              "body": "Rebased onto main (d2077ab): Code Review [found nothing](https://github.com/artspb/ai-workshop-start/pull/55#pullrequestreview-6076969901) on 7b2276c, but it conflicted with #50 in `AGENTS.md` (#50 added the Owner section, this pull request the Screenshots section). Both sections are kept, Owner first. The typecheck, the tests (145 pass) and the smoke scan pass. To re-review the rebase, compare `git range-diff d2077ab 7b2276c 8f2be7d`, not `git diff 7b2276c..8f2be7d`, which shows only what main gained. Not merged: the new head waits for its review. (An earlier rebase comment on this pull request described a push that never reached GitHub; this one is the push that did.)\n\nProduced by Air Automations. Name: 4. Merge Reviewed / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/1a688c3e-61d6-4269-b253-f1ddec8c719d?run=14c641ce-ce49-48b4-9b12-e8465310b552",
+              "createdAt": "2026-11-26T15:53:00Z"
+            }
+          ]
+        },
+        "reviews": {
+          "nodes": [
+            {
+              "id": "PRR_kwDOV8tIdc8AAAABajZmFg",
+              "databaseId": 6076917270,
+              "author": {
+                "login": "jetbrains-air",
+                "__typename": "Bot"
+              },
+              "state": "COMMENTED",
+              "viewerDidAuthor": true,
+              "body": "Nothing blocks the merge. One suggestion, inline: the Linux-only guard of `npm run e2e:update` works, but no test covers it. The main risk, screenshots that differ between machines, did not show: the 6 visual tests pass here on a second Linux machine with a fresh `HOME` and 50 system fonts installed, and CI is green on `d29eba5`, whose tree is identical to `c5f8c38`.\n\nChecked: the 8 baselines, opened one by one, show the fixture and the seeded store and nothing else, and are alone in their commit; a missing baseline fails and is not written; without `FONTCONFIG_FILE` all 6 tests fail, the fonts test included; `npm run e2e:update` on a clean tree changes no file; the throwaway `d7bddc4` (`#2563eb` → `#2563ec`) turned [CI red](https://github.com/artspb/ai-workshop-start/actions/runs/45850775190) with the `playwright-report` artifact uploaded, and `d29eba5` reverts it. The description now shows that proof too (\"A changed pixel fails the check\").\n\nProduced by Air Automations. Name: 2. Code Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/8d0ab705-e1d8-4895-bf56-42b1c943eb46?run=fac2d0e8-2ab8-46e4-b0a3-7ed9d57fe7d7",
+              "submittedAt": "2026-11-26T15:40:20Z",
+              "commit": {
+                "oid": "d29eba5e9c1ce8b594e5d725a8ff8cd5a881af36"
+              },
+              "comments": {
+                "nodes": [
+                  {
+                    "replyTo": null
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRR_kwDOV8tIdc8AAAABajbhnw",
+              "databaseId": 6076948895,
+              "author": {
+                "login": "jetbrains-air",
+                "__typename": "Bot"
+              },
+              "state": "COMMENTED",
+              "viewerDidAuthor": true,
+              "body": "Round 1: the e2e:update Linux-only guard now has a test (`7b2276c`), see the thread. On the review body: **Not changed**. The description no longer says \"The proof that a changed pixel fails is below\". Its section *A changed pixel fails the check* already links the [red run](https://github.com/artspb/ai-workshop-start/actions/runs/45850775190) and its [Playwright report](https://github.com/artspb/ai-workshop-start/actions/runs/45850775190/artifacts/15132338736). The body was edited at 15:39, a minute before the review.\n\nProduced by Air Automations. Name: 3. Address Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/c1da6cbb-a56d-4b33-9d9b-bbbe0ad87586?run=60e7eed2-95e4-4934-8d13-1c606fcf96c0\n\n<!-- address-review answers:6076917270 -->",
+              "submittedAt": "2026-11-26T15:42:49Z",
+              "commit": {
+                "oid": "d29eba5e9c1ce8b594e5d725a8ff8cd5a881af36"
+              },
+              "comments": {
+                "nodes": [
+                  {
+                    "replyTo": {
+                      "id": "PRRC_kwDOV8tIdc8AAAABGMWx3g"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRR_kwDOV8tIdc8AAAABajczrQ",
+              "databaseId": 6076969901,
+              "author": {
+                "login": "jetbrains-air",
+                "__typename": "Bot"
+              },
+              "state": "COMMENTED",
+              "viewerDidAuthor": true,
+              "body": "Nothing blocks the merge. The earlier suggestion is fixed in `7b2276c` and its thread is resolved: with the Linux-only guard of `npm run e2e:update` removed, `npm test` now fails (131 pass, 1 fail), and with it in place 132 pass. That commit only adds the test to `tests/visual.test.ts`; no screenshot and no other file changed since the last review, and CI is green on the head.\n\nProduced by Air Automations. Name: 2. Code Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/8d0ab705-e1d8-4895-bf56-42b1c943eb46?run=0bc81903-1053-477a-b93f-5df3c1979c54",
+              "submittedAt": "2026-11-26T15:44:28Z",
+              "commit": {
+                "oid": "7b2276cb95cedd38eeb45ea09287ad9d8d217b44"
+              },
+              "comments": {
+                "nodes": []
+              }
+            }
+          ]
+        },
+        "reviewThreads": {
+          "nodes": [
+            {
+              "id": "PRRT_kwDOV8tIdc68ddcO",
+              "isResolved": true,
+              "isOutdated": false,
+              "path": "playwright.config.ts",
+              "line": 8,
+              "comments": {
+                "nodes": [
+                  {
+                    "databaseId": 4710576606,
+                    "author": {
+                      "login": "jetbrains-air",
+                      "__typename": "Bot"
+                    },
+                    "body": "**suggestion** The spec's case \"only `npm run e2e:update` writes one, and only on Linux\" has no test: the guard can be removed and `npm test` stays green.\n```\nsed -i \"s/if (updating && process.platform !== 'linux')/if (false)/\" playwright.config.ts && npm test\ngives:    pass 131, fail 0\nexpected: a failing test (AGENTS.md: integration tests for every case in the spec)\n```\nThe guard itself works, checked with the platform faked:\n```\necho \"Object.defineProperty(process,'platform',{value:'darwin'})\" > /tmp/darwin.cjs\nNODE_OPTIONS=\"--require /tmp/darwin.cjs\" npm run e2e:update\n→ Error: Accept new screenshots on Linux, as CI runs them, not on darwin: see AGENTS.md\n```\nA test in `tests/visual.test.ts` can run exactly that (`playwright test --list -u` is enough: the config throws before any browser starts) and assert the exit code and the message.\n\nProduced by Air Automations. Name: 2. Code Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/8d0ab705-e1d8-4895-bf56-42b1c943eb46?run=fac2d0e8-2ab8-46e4-b0a3-7ed9d57fe7d7",
+                    "createdAt": "2026-11-26T15:40:21Z"
+                  },
+                  {
+                    "databaseId": 4710603210,
+                    "author": {
+                      "login": "jetbrains-air",
+                      "__typename": "Bot"
+                    },
+                    "body": "Fixed in `7b2276c`: `tests/visual.test.ts` has a new test, *only npm run e2e:update writes a baseline, and only on Linux*. It runs `npm run e2e:update`'s command from `package.json` with `--list`, with Node preloaded to report `darwin`: it exits non-zero with `Accept new screenshots on Linux, as CI runs them, not on darwin: see AGENTS.md`, and so do `-u`, `--update-snapshots` and `--update-snapshots=all`. It also checks that `e2e:update` on Linux, and plain `playwright test` on a Mac, both list the tests. Your reproduction now fails:\n```\nsed -i \"s/if (updating && process.platform !== 'linux')/if (false)/\" playwright.config.ts && npm test\ngives: pass 131, fail 1  (✖ only npm run e2e:update writes a baseline, and only on Linux …)\n```\nWith the guard restored: pass 132, fail 0 (`npm ci && npm run typecheck && npm test`, in a clean environment with no token).\n\nProduced by Air Automations. Name: 3. Address Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/c1da6cbb-a56d-4b33-9d9b-bbbe0ad87586?run=60e7eed2-95e4-4934-8d13-1c606fcf96c0\n\n<!-- address-review -->",
+                    "createdAt": "2026-11-26T15:42:48Z"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
