@@ -26,7 +26,8 @@ A GitHub scan listed through its **tree** is **stored**; the same repository at 
 - A **code search** scan (`GITHUB_TOKEN`, the default branch) is never stored: the index follows the default branch late,
   and may not have every skill of the commit yet; the next scan may find more
 - Each stored scan records **every ref asked for**, in order: `<branch> (default branch)`, the `<ref>` of `/tree/<ref>`;
-  two refs at the same commit share one stored scan, scanned once
+  two refs at the same commit share one stored scan, scanned once; refs scanned at the same time in one process are all kept
+  (two processes at the same time may keep only one)
 - Resolving the ref still asks GitHub; listing and reading the files does not
 - Stored: the whole result, warnings included; a failed scan is not stored
 - A local directory is never stored: its files change without a commit; a scan not stored is scanned every time
