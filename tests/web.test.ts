@@ -45,12 +45,14 @@ test('the page: a box, Scan, a filter, the warnings and the scans before, as HTM
   }
 });
 
-test('the page: Scanned before comes under the box, before the status, the progress bar and the result, and collapses; open at first', async () => {
+test('the page: Scanned before comes under the box and the status, before the progress bar and the result, and collapses; open at first', async () => {
   const html = await (await fetch(`${base}/`)).text();
   const history = html.indexOf('<details id="history" open hidden>');
   assert.ok(history > 0, 'Scanned before is a <details>, open');
-  assert.ok(html.indexOf('<form id="scan">') > 0 && html.indexOf('<form id="scan">') < history, 'under the box');
-  for (const after of ['id="status"', 'id="progress"', 'id="result"']) assert.ok(history < html.indexOf(after), `before ${after}`);
+  const form = html.indexOf('<form id="scan">'), status = html.indexOf('id="status"');
+  assert.ok(form > 0 && form < status, 'the status under the box');
+  assert.ok(status < history, 'under the status');
+  for (const after of ['id="progress"', 'id="result"']) assert.ok(history < html.indexOf(after), `before ${after}`);
   assert.match(html.slice(history), /^<details id="history" open hidden>\s*<summary><h2>Scanned before<\/h2><\/summary>/);
 });
 
