@@ -105,6 +105,14 @@ No finding without a check: what you cannot reproduce, leave out or ask as a **q
 - **`tests/e2e/*.txt`**: `UPDATE=1 npm run e2e` rewrites them, so every changed line must follow from the change.
   An unexplained change there is a regression until shown otherwise.
 - A changed `fixture/`: its case is in the table in `fixture/README.md`.
+- **Screenshots** (`tests/visual/**/*.png`, [visual tests](../../../spec/web.md#visual-tests)): only the author accepts
+  new ones, with `npm run e2e:update` on Linux, in a commit of its own, `Accept new screenshots: <why>`.
+  Open each changed one, before and after: `gh pr diff` shows no image, so look at both files
+  (`git show <base>:<path> > before.png`, `git show <head>:<path> > after.png`).
+  It shows the change the issue asked for, and nothing else: anything more is a regression until shown otherwise,
+  a **blocking** finding in the summary, with its path (an image takes no inline comment). Blocking too: a screenshot
+  changed by a pull request not meant to change the page, or in a commit with other changes; a test weakened, a tolerance
+  added or a part masked so a screenshot passes.
 - The web view: `GITHUB_TOKEN` stays in the server, never in a page or a response.
 - Only the scan store is written ([persistence](../../../spec/analysis.md#persistence)): GitHub scans listed through a tree,
   by commit, and a code-search scan only when its list is exact for the commit, under its own key.
