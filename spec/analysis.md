@@ -45,8 +45,13 @@ A GitHub scan listed through its **tree** is **stored**, with `GITHUB_TOKEN` or 
     with `GITHUB_TOKEN`, the default branch uses code search instead, never served the roots
   - A scan an earlier version stored, for a `/tree/<ref>` or for the default branch without `GITHUB_TOKEN`, is found again:
     of a tree in one answer, it is the one stored scan, for every ref, with `GITHUB_TOKEN` or without; of the roots, only for its own kind
-- A **code search** scan is never stored: the index follows the default branch late, and may not have every skill of the commit yet;
-  the next scan may find more
+- A **code search** scan is stored only when its list is *exact for the commit*: the index follows the default branch late
+  - Each result names the commit the index reflects: the `?ref=` of its `url`
+  - **Index current**: every result on every page names the resolved commit, no page has `incomplete_results`, at most 1000 results → stored
+  - **Index behind**: every result names one commit, an ancestor of the head: the compare to the head (`status: ahead`) catches it up → stored
+  - Else **not stored**, and the next scan may find more: no result, results naming different commits, `incomplete_results`,
+    more than 1000 results, a compare not `ahead`, a compare of 300 files or more (it may not list them all), a `SKILL.md` changed otherwise
+  - Its own key, not the whole tree's: the index may skip a file the tree has (a large one); served only to code search
 - Each stored scan records **every ref asked for**, in order: `<branch> (default branch)`, the `<ref>` of `/tree/<ref>`;
   two refs at the same commit share one stored scan, scanned once; refs scanned at the same time in one process are all kept
   (two processes at the same time may keep only one)
@@ -64,6 +69,9 @@ Skill: id = `repo:path`, name, description, commit, copies
 - Every scan asks for the **tree** first. A tree too large for one answer: only the roots at the repository root, and a *warning*;
   with `GITHUB_TOKEN`, on the default branch, code search finds every root, after the tree's answer
 - Code search sees only the default branch: a `/tree/<ref>` scan always lists the tree
+- **Catch-up**: an index behind the head, every result naming one commit, an ancestor: `compare/<index>...<head>`;
+  its `SKILL.md` files `added` (or `copied`) are added, `removed` dropped, `renamed` moved; a skill added since the index commit is found.
+  Stored or not: an incomplete search is caught up too. One extra request, only when the index lags
 - The name: front matter, else the directory
 - The link pins the *scanned commit*; for a local directory, the file itself
 - Malformed or missing front matter → a *warning*, the scan goes on

@@ -85,12 +85,13 @@ export async function openGitHub(input: string, options: GitHubOptions): Promise
   const [organization, repo] = id.split('/');
   // The keys: a tree in one answer lists the same for every ref, with a token or without: one
   // stored scan. A tree too large lists the roots, with a warning worded for a ref or for the
-  // default branch: stored apart. Code search is never stored: its index follows the default
-  // branch late, and may not have every skill of the commit yet. The names of the roots' keys
+  // default branch: stored apart. Code search, only when its list is exact for the commit (see
+  // searchPaths), under its own key: the index may skip a file the tree has. The names of the roots' keys
   // are those an earlier version stored a scan of either kind under, whole tree or roots, so
   // those are found again: by any input when the tree was whole, else only by their own kind.
   const key = (listing: string) => JSON.stringify(['github', id, sha, listing]);
   const whole = key('whole tree');
+  const search = searchable ? key('code search') : undefined;
   const earlier = [key('tree'), key('tree of the default branch')];
   const roots = searchable ? undefined : earlier[name.ref ? 0 : 1];
   return {
@@ -98,29 +99,88 @@ export async function openGitHub(input: string, options: GitHubOptions): Promise
     async list() {
       const tree = await github.json<Tree>(`${API}/repos/${id}/git/trees/${sha}?recursive=1`);
       if (!tree.truncated) return { paths: files(tree), warnings: [], key: whole };
-      if (searchable) return { paths: await searchPaths(github, id), warnings: [] };
+      if (searchable) {
+        const searched = await searchPaths(github, id, sha);
+        return { paths: searched.paths, warnings: [], key: searched.exact ? search : undefined };
+      }
       const warnings: string[] = [];
       return { paths: await rootPaths(github, id, sha, warnings, !name.ref), warnings, key: roots };
     },
     read: (path) => github.raw(`${RAW}/${id}/${sha}/${encodePath(path)}`),
-    keys: [whole, ...(roots ? [roots] : []), ...earlier.filter((other) => other !== roots)],
-    serves: (stored, result) => stored === whole || stored === roots || !result.warnings[0]?.startsWith(TOO_LARGE),
+    keys: [whole, ...(search ? [search] : []), ...(roots ? [roots] : []), ...earlier.filter((other) => other !== roots)],
+    serves: (stored, result) =>
+      stored === whole || stored === search || stored === roots || !result.warnings[0]?.startsWith(TOO_LARGE),
     ref: name.ref ?? `${info.default_branch} (default branch)`,
   };
 }
 
-/** Code search looks at the whole default branch, 100 results a page. */
-async function searchPaths(github: Client, id: string): Promise<string[]> {
+/**
+ * Code search looks at the whole default branch, 100 results a page. Each result names the commit
+ * the index reflects, in the `?ref=` of its `url`. `exact`: the list is the commit's own, so it can
+ * be stored: every result names one commit, the search is complete, and that commit is the head or
+ * an ancestor the compare catches up from. An index behind the head is caught up even when the
+ * search is not complete: a skill added since is found.
+ */
+async function searchPaths(github: Client, id: string, sha: string): Promise<{ paths: string[]; exact: boolean }> {
   const paths = new Set<string>(); // pages can repeat a result
+  const refs = new Set<string>();
+  let complete = true;
   // GitHub returns at most 1000 results: ten pages.
   for (let page = 1; page <= 10; page++) {
-    const result = await github.json<{ total_count: number; items: { path: string }[] }>(
+    const result = await github.json<{ total_count: number; incomplete_results?: boolean; items: { path: string; url?: string }[] }>(
       `${API}/search/code?q=filename:SKILL.md+repo:${id}&per_page=100&page=${page}`,
     );
-    for (const item of result.items) paths.add(item.path);
+    if (result.incomplete_results || result.total_count > 1000) complete = false;
+    for (const item of result.items) {
+      paths.add(item.path);
+      refs.add(indexCommit(item.url));
+    }
     if (result.items.length < 100 || page * 100 >= result.total_count) break;
   }
-  return [...paths];
+  // No result names no commit; results naming different commits, or none, are not one listing.
+  const [index] = refs;
+  if (refs.size !== 1 || !index) return { paths: [...paths], exact: false };
+  if (index === sha) return { paths: [...paths], exact: complete };
+  const caughtUp = await catchUp(github, id, index, sha, paths);
+  return { paths: [...(caughtUp ?? paths)], exact: complete && Boolean(caughtUp) };
+}
+
+/** The commit a code-search result reflects: the `?ref=` of its `url`; '' if none. */
+function indexCommit(url: string | undefined): string {
+  if (!url) return '';
+  try {
+    return new URL(url).searchParams.get('ref') ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/** The compare's files per page: a compare with as many may have more. */
+const COMPARE_LIMIT = 300;
+
+/**
+ * The search list of the index commit, made the head's: the `SKILL.md` files the commits since
+ * added, removed or renamed. Undefined when the compare cannot be trusted: the index commit is not
+ * an ancestor of the head, the compare may not list every file, or a `SKILL.md` changed otherwise.
+ */
+async function catchUp(github: Client, id: string, index: string, head: string, paths: Set<string>): Promise<Set<string> | undefined> {
+  const compare = await github.json<{ status: string; files?: { filename: string; status: string; previous_filename?: string }[] }>(
+    `${API}/repos/${id}/compare/${index}...${head}`,
+  );
+  const changed = compare.files ?? [];
+  if (compare.status !== 'ahead' || changed.length >= COMPARE_LIMIT) return undefined;
+  const isSkill = (path: string | undefined) => path !== undefined && (path === 'SKILL.md' || path.endsWith('/SKILL.md'));
+  const caughtUp = new Set(paths);
+  for (const file of changed) {
+    if (!isSkill(file.filename) && !isSkill(file.previous_filename)) continue;
+    if (file.status === 'added' || file.status === 'copied') caughtUp.add(file.filename);
+    else if (file.status === 'removed') caughtUp.delete(file.filename);
+    else if (file.status === 'renamed') {
+      if (file.previous_filename) caughtUp.delete(file.previous_filename);
+      if (isSkill(file.filename)) caughtUp.add(file.filename);
+    } else if (file.status !== 'modified') return undefined;
+  }
+  return caughtUp;
 }
 
 type Tree = { truncated: boolean; tree: { path: string; mode: string; type: string; sha: string }[] };
