@@ -170,7 +170,9 @@ test('refs at one commit scanned at the same time: none is lost, stored or not y
   await scan(await open(MAIN), stored);
   const [v1, v2] = await Promise.all([open('v1.0'), open('v2.0')]);
   const hits = await Promise.all([scan(v1, stored), scan(v2, stored)]);
-  assert.deepEqual((await stored.list()).map((scan) => scan.refs), [[MAIN, 'v1.0', 'v2.0']]);
+  // The first ref first; the two at the same time in whichever order they arrive.
+  const [[first, ...together]] = (await stored.list()).map((scan) => scan.refs);
+  assert.deepEqual([first, together.sort()], [MAIN, ['v1.0', 'v2.0']]);
   // Not stored yet: both scan, and the second to finish adds its ref to the first's.
   const empty = openStore(storeDirectory(t));
   const misses = await Promise.all([scan(await open('v1.0'), empty), scan(await open('v2.0'), empty)]);
