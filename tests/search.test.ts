@@ -147,7 +147,7 @@ test('/api/search: a word in the repository, <owner>/<repo>, finds its skills to
 test('/api/search: a repository matched, only its latest stored scan', async (t) => {
   const { search } = await serve(t);
   assert.deepEqual(found((await search('jetbrains/example')).body), ['JetBrains/example commits', 'JetBrains/example review']);
-  assert.deepEqual((await search('example old-only')).body, { results: [] });
+  assert.deepEqual((await search('example old-only')).body, { results: [], more: 0 });
 });
 
 test('/api/search: sorted by name, then repository, then path', async (t) => {
