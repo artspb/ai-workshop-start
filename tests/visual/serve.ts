@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { openGitHub, parseGitHubUrl } from '../../src/core/github.ts';
 import { replay } from '../../src/core/replay.ts';
+import type { Meter } from '../../src/core/requests.ts';
 import { openDirectory } from '../../src/local.ts';
 import { cacheDirectory, openStore } from '../../src/store.ts';
 import { createWebServer, listen } from '../../src/web/server.ts';
@@ -17,7 +18,7 @@ for (const { key, refs, scannedAt, result } of JSON.parse(readFileSync(process.a
 }
 
 const github = replay(RATE_LIMITED);
-const open = (input: string) => (parseGitHubUrl(input) ? openGitHub(input, { fetch: github }) : openDirectory(input));
+const open = (input: string, meter?: Meter) => (parseGitHubUrl(input) ? openGitHub(input, { fetch: github, meter }) : openDirectory(input));
 // A scan the page stores is stored at NOW, as the page's clock says.
 const store = openStore(directory, () => NOW);
 console.log(await listen(createWebServer({ open, store }), 0));

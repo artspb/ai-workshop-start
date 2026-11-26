@@ -2,7 +2,7 @@
 // /?repo=<URL | directory | organization URL> scans, /?scan=<id> opens a stored scan.
 import { filterRepositories, filterSkills } from './filter.js';
 import { addressRequest, historyView, scanSignals, searchAsker, searchView, storedBox, storedOnPage } from './history.js';
-import { errorText, progressText, progressUrl, readAnswer, stoppedText } from './progress.js';
+import { errorText, progressText, progressUrl, quotaText, readAnswer, requestsText, stoppedText } from './progress.js';
 
 const $ = (id) => document.getElementById(id);
 const form = $('scan');
@@ -14,6 +14,7 @@ const earlier = $('history');
 const stop = $('stop');
 const bar = $('progress');
 const search = $('search');
+const requests = $('requests');
 
 /** The last scan's skills; the filter shows a part of them. */
 let skills = [];
@@ -25,6 +26,8 @@ let latest = 0;
 const nextScan = scanSignals();
 /** The stored scan on the page, if any: the one marked in Scanned before. */
 let shown = null;
+/** The last quota the page heard of, from an answer or the server: shown under the box before a scan's own line. */
+let quota = null;
 /** The scan running, for Stop: what it scans and how far it got; null when none runs. */
 let running = null;
 /** The search, asked once the typing pauses; only the latest word's answer is shown. */
@@ -72,23 +75,30 @@ async function scanAddress() {
   showRunning(null);
   if (!request) {
     status.hidden = result.hidden = true;
+    showQuota();
     return showHistory();
   }
+  showRequests(quotaText(quota));
   showStatus(request.repo ? progressText(request.repo) : 'Opening the stored scan…');
   if (request.repo) showRunning({ repo: request.repo, progress: null });
   result.hidden = true;
   let answer;
   try {
-    answer = await readAnswer(await fetch(progressUrl(request), { signal }), (progress) => {
+    answer = await readAnswer(await fetch(progressUrl(request), { signal }), (progress, line) => {
       if (scan !== latest) return;
       showRunning({ repo: request.repo, progress });
       showStatus(progressText(request.repo, progress));
+      // The counts and the quota as the scan goes: Stop before the quota runs out.
+      if (line.quota) quota = line.quota;
+      showRequests(requestsText(line));
     });
   } catch (error) {
     answer = { error: `The Skill Atlas server does not answer: ${error.message}` };
   }
   if (scan !== latest) return;
   showRunning(null);
+  if (answer.quota) quota = answer.quota;
+  if (answer.requests) showRequests(requestsText(answer));
   if (answer.error) {
     showStatus(errorText(answer), true);
   } else {
@@ -100,6 +110,23 @@ async function scanAddress() {
   }
   // A new scan may be stored now.
   showHistory();
+}
+
+/** A scan's requests and the quota left, under the box; '' hides the line. */
+function showRequests(text) {
+  requests.textContent = text;
+  requests.hidden = !text;
+}
+
+/** Before any scan: the quota the server last saw, from an earlier scan; it never asks GitHub for it. */
+async function showQuota() {
+  const asked = latest;
+  try {
+    ({ quota } = await (await fetch('/api/quota')).json());
+  } catch {
+    return;
+  }
+  if (asked === latest) showRequests(quotaText(quota));
 }
 
 /** Every stored scan, the latest first; the one on the page is marked. */

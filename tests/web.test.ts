@@ -96,6 +96,9 @@ test('/api/scan, a GitHub repository: the repository, each skill with its pinned
     ],
     warnings: [],
     stored: null,
+    // A fresh scan: the repository, its commit and its tree; its one skill's file.
+    requests: { rest: 3, graphql: 0, files: 1 },
+    quota: null,
   });
 });
 
@@ -130,11 +133,12 @@ test('/api/scan, a local directory with &progress: JSON, as without it', async (
 });
 
 test('/api/scan, an error the CLI reports with exit code 1: 400 with its message', async () => {
-  assert.deepEqual(await scan(), { status: 400, type: 'application/json; charset=utf-8', body: { error: 'Enter a GitHub URL or a directory' } });
-  assert.deepEqual((await scan('  ')).body, { error: 'Enter a GitHub URL or a directory' });
+  const none = { requests: { rest: 0, graphql: 0, files: 0 }, quota: null };
+  assert.deepEqual(await scan(), { status: 400, type: 'application/json; charset=utf-8', body: { error: 'Enter a GitHub URL or a directory', ...none } });
+  assert.deepEqual((await scan('  ')).body, { error: 'Enter a GitHub URL or a directory', ...none });
   const missing = await scan(`${FIXTURE}/no-such-directory`);
   assert.equal(missing.status, 400);
-  assert.deepEqual(missing.body, { error: `Not a GitHub URL or a readable directory: ${FIXTURE}/no-such-directory` });
+  assert.deepEqual(missing.body, { error: `Not a GitHub URL or a readable directory: ${FIXTURE}/no-such-directory`, ...none });
   const unknown = await scan('github.com/JetBrains/unknown');
   assert.equal(unknown.status, 400);
   assert.match(unknown.body.error, /JetBrains\/unknown/);
@@ -143,7 +147,7 @@ test('/api/scan, an error the CLI reports with exit code 1: 400 with its message
   assert.deepEqual(branch, {
     status: 400,
     type: 'application/json; charset=utf-8',
-    body: { error: 'Not found in https://github.com/JetBrains/example: no-such-branch' },
+    body: { error: 'Not found in https://github.com/JetBrains/example: no-such-branch', requests: { rest: 2, graphql: 0, files: 0 }, quota: null },
   });
 });
 

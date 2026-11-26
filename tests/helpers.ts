@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { run } from '../src/commands.ts';
 import { openGitHub, parseGitHubUrl, type Fetch } from '../src/core/github.ts';
 import { replay, type Recording } from '../src/core/replay.ts';
+import type { Meter } from '../src/core/requests.ts';
 import { openDirectory } from '../src/local.ts';
 import { createWebServer, listen } from '../src/web/server.ts';
 
@@ -35,8 +36,8 @@ const EXAMPLE: Recording = {
 const github = replay(EXAMPLE);
 
 /** Opens a scan as the CLI does, with a token, as EXAMPLE answers it: its tree fits in one answer. */
-export const open = (input: string) =>
-  parseGitHubUrl(input) ? openGitHub(input, { fetch: github, token: 'test' }) : openDirectory(input);
+export const open = (input: string, meter?: Meter) =>
+  parseGitHubUrl(input) ? openGitHub(input, { fetch: github, token: 'test', meter }) : openDirectory(input);
 
 /** `skill-atlas <args>`, as the CLI runs it, with GitHub answering from EXAMPLE. */
 export async function atlas(args: string[]) {
