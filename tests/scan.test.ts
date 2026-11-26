@@ -129,7 +129,7 @@ test('a skill under .git or node_modules is not a project skill', async (t) => {
   ]);
 });
 
-test('the CLI prints the result at once and stores nothing', (t) => {
+test('the CLI prints the result at once; a local directory: nothing stored', (t) => {
   const cwd = mkdtempSync(join(tmpdir(), 'skill-atlas-'));
   t.after(() => rmSync(cwd, { recursive: true, force: true }));
   const scanned = spawnSync(process.execPath, [CLI, 'scan', FIXTURE], { cwd, encoding: 'utf8' });
@@ -184,7 +184,7 @@ test('/tree/<ref>: that commit, listed through its tree even with a token; an un
   // No search is recorded: a search would fail the scan.
   const source = await openGitHub('https://github.com/JetBrains/example/tree/v1.0/', { fetch: github, token: 'test' });
   assert.equal(source.repository.commit, commit);
-  assert.deepEqual(source.paths, ['.claude/skills/commits/SKILL.md']);
+  assert.deepEqual((await source.list()).paths, ['.claude/skills/commits/SKILL.md']);
 
   await assert.rejects(openGitHub('github.com/JetBrains/example/tree/no-such-ref', { fetch: github, token: 'test' }), {
     message: 'Not found in https://github.com/JetBrains/example: no-such-ref',

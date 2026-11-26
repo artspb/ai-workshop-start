@@ -1,9 +1,12 @@
 // End-to-end: the real CLI on real GitHub repositories, each at a fixed commit, compared with
 // what it printed before, stdout then stderr, in tests/e2e/<owner>-<repo>.txt.
 // `UPDATE=1 npm run e2e` rewrites the files. Live GitHub: set GITHUB_TOKEN for its rate limit.
+// Each scan starts with an empty store, so it reaches GitHub; a second scan comes from the store.
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -27,13 +30,27 @@ describe('real repositories', { concurrency: true }, () => {
     const [, owner, repo] = url.split('/');
     const expected = new URL(`${owner}-${repo}.txt`, import.meta.url);
 
-    test(`skill-atlas scan ${url}`, async () => {
-      const { stdout, stderr } = await run(process.execPath, [CLI, 'scan', url]).catch((error) => {
-        assert.fail(`exit code ${error.code}: ${error.stderr}`);
-      });
-      const printed = stdout + stderr;
+    test(`skill-atlas scan ${url}`, async (t) => {
+      const store = mkdtempSync(join(tmpdir(), 'skill-atlas-e2e-'));
+      t.after(() => rmSync(store, { recursive: true, force: true }));
+      const scan = async () => {
+        const env = { ...process.env, SKILL_ATLAS_CACHE: store };
+        const { stdout, stderr } = await run(process.execPath, [CLI, 'scan', url], { env }).catch((error) => {
+          assert.fail(`exit code ${error.code}: ${error.stderr}`);
+        });
+        return stdout + stderr;
+      };
+      const printed = await scan();
       if (process.env.UPDATE) writeFileSync(expected, printed);
       assert.equal(printed, readFileSync(fileURLToPath(expected), 'utf8'));
+
+      // Stored: the same commit again prints the same, and the stored file is not rewritten.
+      const [file] = readdirSync(store);
+      assert.ok(file, 'the scan is stored');
+      const written = statSync(join(store, file)).mtimeMs;
+      assert.equal(await scan(), printed);
+      assert.deepEqual(readdirSync(store), [file]);
+      assert.equal(statSync(join(store, file)).mtimeMs, written);
     });
   }
 });

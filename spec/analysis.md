@@ -20,8 +20,16 @@ a regular file named exactly `SKILL.md` at **`<root>/<name>/SKILL.md`**.
 - **Copies**: the same `<name>` and the *same bytes* in more than one place are **one skill**.
   Its path is the first by path; the others are its copies, and share its warnings.
   The same `<name>` with different bytes: *two skills*.
+## Persistence
+A GitHub scan is **stored**; the same repository at the same commit is not scanned again.
+- The key: the repository, the **resolved commit**, and how it was listed (code search, its tree); a branch that moved is a new commit, a new scan
+- Resolving the ref still asks GitHub; listing and reading the files does not
+- Stored: the whole result, warnings included; a failed scan is not stored
+- A local directory is never stored: its files change without a commit
+- On disk, one file per scan: `SKILL_ATLAS_CACHE`, else `$XDG_CACHE_HOME/skill-atlas`, else `~/.cache/skill-atlas`; shared by `scan` and `serve`
+- The store never fails a scan: an unreadable or corrupt file → scanned again; an unwritable directory → not stored
 ## Architecture
-Core: fetch → find → parse. CLI: a *thin client*.
+Core: fetch → find → parse, then the store. CLI: a *thin client*.
 Skill: id = `repo:path`, name, description, commit, copies
 ## Details
 - **GitHub API**, no clone; *under 5 s* for intellij-community

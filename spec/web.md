@@ -1,6 +1,6 @@
 # Web view
 `./skill-atlas serve [--port <port>]`: a page on **`http://localhost:4173`**, the same scan as the CLI.
-`--port 0` picks a free port. The server prints its URL; it stores nothing.
+`--port 0` picks a free port. The server prints its URL. It shares the CLI's [stored scans](analysis.md#persistence).
 ## Architecture
 The core runs in the server; the page is a *thin client*: HTML, CSS and plain JavaScript, no framework, no build.
 - GitHub repositories and local directories, as `scan`
