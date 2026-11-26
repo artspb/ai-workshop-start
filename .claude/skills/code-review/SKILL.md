@@ -55,7 +55,9 @@ No finding without a check: what you cannot reproduce, leave out or ask as a **q
 - No style nits the typecheck catches. See [AGENTS.md](../../../AGENTS.md) for the definition of done.
 
 ## 4. Write
-- **The summary**: two or three sentences. The verdict (merge, or what blocks it), then the main risk.
+- **The summary**: two or three sentences. The verdict first, in these words: `Nothing blocks the merge.` when nothing
+  does, else `Blocks the merge:` and what blocks it; then the main risk. merge-when-reviewed merges an Air bot's
+  pull request only on a summary starting with `Nothing blocks` and no findings at all, so don't start with it otherwise.
 - **Inline comments**: every finding on the line it is about; at most 10, the most important first.
   Each comment:
   - starts with **blocking**, **suggestion** or **question**
@@ -77,7 +79,8 @@ gh api repos/{owner}/{repo}/pulls/<n>/reviews --method POST --input review.json
   "comments": [{ "path": "src/core/find.ts", "line": 12, "side": "RIGHT", "body": "<the comment>" }]
 }
 ```
-- `event`: `REQUEST_CHANGES` with a **blocking** comment, else `COMMENT`. Never `APPROVE`: merging is a person's call.
+- `event`: `REQUEST_CHANGES` with a **blocking** comment, else `COMMENT`. Never `APPROVE`: you never merge.
+  merge-when-reviewed merges an Air bot's pull request once your review finds nothing; a person merges every other one.
 - A 422 rejects the whole review; read its `errors` and post again:
   - `REQUEST_CHANGES` on your own pull request: post the same review with `"event": "COMMENT"`;
     the **blocking** labels and the summary's verdict still say what blocks.
