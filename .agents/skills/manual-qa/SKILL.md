@@ -140,6 +140,11 @@ QA of <sha>:
 | [errors](…/qa/errors.md) | **fail** at step 6: [#<issue>](…) | [GIF](…) · [MP4](…) |
 ```
 
+## 6. Memory
+Last, what this run learned, as [update-memory](../update-memory/SKILL.md) says: a commit of its own on its pull
+request's branch, or none. A QA pass changes nothing and has no pull request of its own (the one it follows is merged):
+none. A lesson worth keeping goes in the report instead, under **Learned**, for a person.
+
 ## Filing an issue
 Every skill that files an issue follows this section, word for word: the issue gets the **Delegate to AI** label
 at once, so the Delegate to AI automation (issue-to-pr) picks it up, with no person to notice it first.
