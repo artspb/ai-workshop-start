@@ -52,10 +52,12 @@ export async function openGitHub(input: string, options: GitHubOptions): Promise
   // stored scan. A tree too large lists the roots, with a warning worded for a ref or for the
   // default branch: stored apart. Code search is never stored: its index follows the default
   // branch late, and may not have every skill of the commit yet. The names of the roots' keys
-  // are those an earlier version stored a scan of either kind under, so those are found again.
+  // are those an earlier version stored a scan of either kind under, whole tree or roots, so
+  // those are found again: by any input when the tree was whole, else only by their own kind.
   const key = (listing: string) => JSON.stringify(['github', id, sha, listing]);
   const whole = key('whole tree');
-  const roots = searchable ? undefined : key(name.ref ? 'tree' : 'tree of the default branch');
+  const earlier = [key('tree'), key('tree of the default branch')];
+  const roots = searchable ? undefined : earlier[name.ref ? 0 : 1];
   return {
     repository: { id, organization, name: repo, url: `https://github.com/${id}`, commit: sha },
     async list() {
@@ -66,7 +68,8 @@ export async function openGitHub(input: string, options: GitHubOptions): Promise
       return { paths: await rootPaths(github, id, sha, warnings, !name.ref), warnings, key: roots };
     },
     read: (path) => github.raw(`${RAW}/${id}/${sha}/${encodePath(path)}`),
-    keys: roots ? [whole, roots] : [whole],
+    keys: [whole, ...(roots ? [roots] : []), ...earlier.filter((other) => other !== roots)],
+    serves: (stored, result) => stored === whole || stored === roots || !result.warnings[0]?.startsWith(TOO_LARGE),
     ref: name.ref ?? `${info.default_branch} (default branch)`,
   };
 }
@@ -87,10 +90,13 @@ async function searchPaths(github: Client, id: string): Promise<string[]> {
 
 type Tree = { truncated: boolean; tree: { path: string; mode: string; type: string; sha: string }[] };
 
+/** The first warning of a roots listing: a result without it is of a tree in one answer. */
+const TOO_LARGE = 'the tree is too large to list at once';
+
 /** Only the skill roots, for a tree too large for one answer. */
 async function rootPaths(github: Client, id: string, sha: string, warnings: string[], searchable: boolean): Promise<string[]> {
   const hint = searchable ? ' (GITHUB_TOKEN searches everywhere)' : '';
-  warnings.push(`the tree is too large to list at once; looked only in ${SKILL_ROOTS.join(', ')}${hint}`);
+  warnings.push(`${TOO_LARGE}; looked only in ${SKILL_ROOTS.join(', ')}${hint}`);
   const paths: string[] = [];
   for (const root of SKILL_ROOTS) {
     const rootSha = await directory(github, id, sha, root);

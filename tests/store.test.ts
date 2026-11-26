@@ -214,6 +214,54 @@ test('scans an earlier version stored, by ref and by default branch without a to
   assert.match(pinned.stdout, /Stored for a ref\./);
 });
 
+test('a scan an earlier version stored of a tree in one answer: the one stored scan, for every ref, with a token or without', async (t) => {
+  for (const [listing, ref] of [['tree of the default branch', 'main (default branch)'], ['tree', MAIN]] as const) {
+    const directory = storeDirectory(t);
+    const store = openStore(directory);
+    const repository = { id: 'JetBrains/example', organization: 'JetBrains', name: 'example', url: 'https://github.com/JetBrains/example', commit: MAIN };
+    const skill = { id: `JetBrains/example:${SKILL}`, repository: repository.id, path: SKILL, name: 'commits', description: 'Stored earlier.', commit: MAIN, copies: [] };
+    await store.set(JSON.stringify(['github', 'JetBrains/example', MAIN, listing]), { ref, result: { repository, skills: [skill], warnings: [] } });
+    for (const [args, token] of [
+      [['scan', `github.com/JetBrains/example/tree/${MAIN}`], undefined],
+      [['scan', 'github.com/JetBrains/example'], 'test'],
+      [['scan', 'github.com/JetBrains/example'], undefined],
+      [['scan', 'github.com/JetBrains/example/tree/v1.0'], 'test'],
+    ] as const) {
+      const again = await atlas([...args], { directory, token });
+      assert.equal(again.requests.length, 2, `${listing}, ${args.join(' ')}: only resolved`);
+      assert.match(again.stdout, /Stored earlier\./);
+    }
+    assert.deepEqual(
+      (await store.list()).map((stored) => stored.refs),
+      [[...new Set([ref, MAIN, 'main (default branch)', 'v1.0'])]],
+    );
+  }
+});
+
+test('a scan an earlier version stored of the roots: only for its own kind of input, never with a token', async (t) => {
+  const directory = storeDirectory(t);
+  const store = openStore(directory);
+  const large = true;
+  const repository = { id: 'JetBrains/example', organization: 'JetBrains', name: 'example', url: 'https://github.com/JetBrains/example', commit: MAIN };
+  const warning = 'the tree is too large to list at once; looked only in .agents/skills, .claude/skills, .github/skills, agent/skills';
+  await store.set(JSON.stringify(['github', 'JetBrains/example', MAIN, 'tree of the default branch']), {
+    ref: 'main (default branch)',
+    result: { repository, skills: [], warnings: [`${warning} (GITHUB_TOKEN searches everywhere)`] },
+  });
+  // Its own kind: the stored roots.
+  const branch = await atlas(['scan', 'github.com/JetBrains/example'], { directory, large });
+  assert.deepEqual(branch.requests, RESOLVE);
+  // With a token: code search, not the stored roots.
+  const searched = await atlas(['scan', 'github.com/JetBrains/example'], { directory, large, token: 'test' });
+  assert.ok(searched.requests.some((url) => url.includes('/search/code')));
+  assert.equal(searched.stderr, '');
+  // A ref: its own roots, with the warning worded for a ref.
+  const pinned = await atlas(['scan', `github.com/JetBrains/example/tree/${MAIN}`], { directory, large });
+  assert.ok(pinned.requests.length > 2);
+  assert.equal(pinned.stderr, `warning: ${warning}`);
+  assert.equal(readdirSync(directory).length, 2);
+});
+
 test('two refs at one commit: one stored scan, scanned once, and both refs recorded, in order', async (t) => {
   const directory = storeDirectory(t);
   const store = openStore(directory);
