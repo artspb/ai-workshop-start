@@ -45,15 +45,20 @@ test('the page: a box, Scan, a filter, the warnings and the scans before, as HTM
   }
 });
 
-test('the page: Scanned before comes under the box and the status, before the progress bar and the result, and collapses; open at first', async () => {
+test('the page: Scanned before is a side panel, beside the box and the result, and collapses; open at first', async () => {
   const html = await (await fetch(`${base}/`)).text();
-  const history = html.indexOf('<details id="history" open hidden>');
-  assert.ok(history > 0, 'Scanned before is a <details>, open');
-  const form = html.indexOf('<form id="scan">'), status = html.indexOf('id="status"');
-  assert.ok(form > 0 && form < status, 'the status under the box');
-  assert.ok(status < history, 'under the status');
-  for (const after of ['id="progress"', 'id="result"']) assert.ok(history < html.indexOf(after), `before ${after}`);
-  assert.match(html.slice(history), /^<details id="history" open hidden>\s*<summary><h2>Scanned before<\/h2><\/summary>/);
+  const header = html.slice(html.indexOf('<header>'), html.indexOf('</header>'));
+  const panel = html.indexOf('<details id="history" open hidden>');
+  assert.ok(panel > html.indexOf('</header>') && panel < html.indexOf('<main>'), 'Scanned before is a <details>, open, between the box and the result');
+  assert.match(html.slice(panel), /^<details id="history" open hidden>\s*<summary><h2>Scanned before<\/h2><\/summary>/);
+  assert.ok(header.indexOf('<form id="scan">') >= 0 && header.indexOf('<form id="scan">') < header.indexOf('id="status"'), 'the status under the box, whatever the panel holds');
+  const main = html.slice(html.indexOf('<main>'), html.indexOf('</main>'));
+  assert.ok(main.indexOf('<progress id="progress" hidden>') >= 0 && main.indexOf('id="progress"') < main.indexOf('id="result"'), 'the bar, then the result');
+  const css = await (await fetch(`${base}/style.css`)).text();
+  assert.ok(css.includes('@media (min-width: 60rem) {'), 'a window of 60rem or more has room for the panel');
+  const wide = css.slice(css.indexOf('@media (min-width: 60rem) {'));
+  assert.match(wide, /body:has\(> #history:not\(\[hidden\]\)\) \{[^}]*display: grid;[^}]*grid-template-areas: "side header" "side main";/, 'on the left, beside the box and the result');
+  assert.match(wide, /#history \{[^}]*grid-area: side;[^}]*position: sticky;[^}]*max-height: calc\(100vh - [^}]*overflow-y: auto;/, 'in view as the result scrolls, scrolling on its own');
 });
 
 test('an unknown path: 404; nothing else from disk', async () => {
