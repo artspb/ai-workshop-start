@@ -18,10 +18,11 @@ something outside the pull request's scope is answered **Not changed**, with the
 Everything you post ends its text with the marker **on a line of its own**: `<!-- address-review -->`, or, in the round's
 review, `<!-- address-review answers:<databaseId>,… -->` naming the review bodies it answers. All Air automations post as
 the same bot, a signature may follow your text, and a reviewer may quote the marker in prose, a code span or a code block;
-so a comment is yours when, outside its code blocks, it has a line that is *only* the marker, whatever its author or its last line:
+so a comment is yours when, outside its fenced code blocks (a ```` ``` ```` or `~~~` fence at the start of a line, closed by
+the same fence), it has a line that is *only* the marker, whatever its author or its last line:
 ```sh
 MARK='(?m)^<!-- address-review( answers:[0-9,]+)? -->\s*$'
-# jq: def mine: gsub("```[\\s\\S]*?```"; "") | test($m);
+# jq: def mine: gsub("(?m)^ {0,3}(`{3,}|~{3,})[^\\n]*\\n[\\s\\S]*?^ {0,3}\\1[`~]*[ \\t]*$"; "") | test($m);
 ```
 
 ## 0. Is there anything to do?
@@ -29,7 +30,8 @@ This skill runs on every submitted review, and your own round is a review too. S
 - the pull request is closed, merged, a draft, or from a fork (`isCrossRepository`);
 - nothing is **unanswered** (below) and no review of yours is `PENDING`: a stranded one, whose replies already read as
   answers, is still submitted (section 3), even with nothing else to answer;
-- the pull request already has **3** commits starting with `Address review`: then, once, post
+- the pull request already has **3 or more** commits starting with `Address review` and no review of yours is `PENDING`
+  (a stranded round 3 is still submitted, section 3, without a new commit): then, once, post
   `Stopped after 3 rounds of review fixes; the open threads are for a person.` as a pull request comment
   (`gh pr comment <n>`, with the marker), unless one of the pull request's `comments` has it already.
 
@@ -50,7 +52,7 @@ The count reads the pull request, not the checkout: an Air checkout is shallow, 
   whose `databaseId` no `answers:` marker names. A body with no finding ("nothing blocks") needs no answer.
 
 ```sh
-jq --arg m "$MARK" 'def mine: gsub("```[\\s\\S]*?```"; "") | test($m);
+jq --arg m "$MARK" 'def mine: gsub("(?m)^ {0,3}(`{3,}|~{3,})[^\\n]*\\n[\\s\\S]*?^ {0,3}\\1[`~]*[ \\t]*$"; "") | test($m);
   .data.repository.pullRequest.reviewThreads.nodes[] | select((.isResolved | not) and (.comments.nodes[-1].body | mine | not))' pr.json
 ```
 
