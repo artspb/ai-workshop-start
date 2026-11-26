@@ -39,7 +39,7 @@ git fetch origin && git switch -c issue-<n>-<short-name> origin/main
    apart from the clients (CLI, web view).
 
 Stay in scope: no refactoring, renaming or formatting the issue does not need. Found another bug?
-Open an issue for it (`gh issue create`), don't fix it here.
+File an issue for it ([Filing an issue](#filing-an-issue)), don't fix it here.
 
 ## 4. Done, locally
 ```sh
@@ -120,8 +120,27 @@ The body:
 - **Tests**: the cases added; e2e output changes and why.
 - **Demo**: the GIF and the video (section 5), the CLI's output as text, or "No demo: <why>".
 - **Open questions**: what a reviewer should decide.
+- **Filed**: the issues you filed or commented on, `#<m>`, if any.
 
 ## 7. Green, then reviewed
 - Watch CI: `gh pr checks <n> --watch`. Red: fix it on the branch and push; never skip or weaken a test to pass.
 - Address review comments with a commit and a reply on each thread; see the `code-review` skill for what reviewers check.
 - Never merge, never push to `main`, never force-push a branch with review comments on it.
+
+## Filing an issue
+Every skill that files an issue follows this section, word for word: the issue gets the **Delegate to AI** label
+at once, so the Delegate to AI automation (issue-to-pr) picks it up, with no person to notice it first.
+1. **No duplicate**: search the open issues first. One already covers it → comment there (`gh issue comment <m>`)
+   and file nothing: a duplicate would be implemented twice.
+   ```sh
+   gh issue list --search "<words> in:title" --state open
+   ```
+2. **File it, then label it in a second call**, not with `--label` on `gh issue create`: the automation runs on
+   `issues.labeled`, and a label added on its own fires that event for sure. A skill's own labels (a QA failure's `bug`)
+   may go in the same edit.
+   ```sh
+   M=$(gh issue create --title "<what is wrong>" --body-file issue.md | grep -o '[0-9]*$')
+   gh issue edit "$M" --add-label "Delegate to AI"
+   ```
+3. **Say which**: name the issue, `#<m>`, filed or commented on, in the skill's answer (the pull request's body,
+   the reply on the thread, the QA report).
