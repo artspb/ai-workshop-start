@@ -39,7 +39,7 @@ An organization, `?repo=github.com/<owner>` → `200` with JSON:
 - `warnings`: every repository's, `<owner>/<repo>: <warning>`, a repository that cannot be scanned too
 - The rate limit, a rejected token, GitHub unreachable, no such owner: `400`, as the CLI's exit code 1
 - The page leaves before the answer (another scan, *back*, a reload, a closed tab): the request closes, and no repository
-  not started yet is asked for; the ones started end, nothing is answered. The page aborts its scan before the next one
+  not started yet is asked for; the ones started end, nothing is answered. The page aborts its scan before the next one, an empty address too
 
 `GET /api/scans` → `200`, `{ scans: [{ id, repository, refs, skills, warnings, scannedAt }] }`: the stored scans, the latest first;
 `skills` and `warnings` are counts, `scannedAt` an ISO 8601 time

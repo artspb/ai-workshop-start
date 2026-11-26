@@ -10,7 +10,7 @@ import { openGitHub, openGitHubOwner, parseGitHubOwner, parseGitHubUrl, type Fet
 import { replay, type Recording } from '../src/core/replay.ts';
 import { openStore } from '../src/store.ts';
 import { filterRepositories } from '../src/web/public/filter.js';
-import { historyView, storedOnPage } from '../src/web/public/history.js';
+import { historyView, scanSignals, storedOnPage } from '../src/web/public/history.js';
 import { createWebServer, listen } from '../src/web/server.ts';
 
 const API = 'https://api.github.com';
@@ -452,11 +452,12 @@ test('the web view, an organization the page left: the repositories not started 
   t.after(() => server.close());
   const started = () => new Set(asked.filter((url) => /\/repos\/Slow\/[^/]+$/.test(url))).size;
   // Unaborted, every repository is scanned: the test would see the difference.
-  const leaving = new AbortController();
-  const page = globalThis.fetch(`${base}/api/scan?repo=github.com%2FSlow`, { signal: leaving.signal });
+  // The page leaves the scan as it does on another scan or *back*: by asking for the next one's signal.
+  const nextScan = scanSignals();
+  const page = globalThis.fetch(`${base}/api/scan?repo=github.com%2FSlow`, { signal: nextScan() });
   await new Promise((resolve) => setTimeout(resolve, 150));
-  leaving.abort();
-  await assert.rejects(page);
+  nextScan();
+  await assert.rejects(page, { name: 'AbortError' });
   const atAbort = started();
   assert.ok(atAbort > 0 && atAbort < 100, `started at the abort: ${atAbort}`);
   await new Promise((resolve) => setTimeout(resolve, 1500));
