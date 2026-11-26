@@ -1,9 +1,12 @@
 # CI for your Skill Atlas repository: the typecheck, the tests, the web view's screenshots and the CLI itself,
 # on every push and pull request, on a clean machine. A pull request is ready when this is green.
+# workflow_dispatch: a push with a workflow's own token starts no workflow, so the Automations workflow
+# (automations.yml) starts CI by hand on the head it pushed.
 name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:

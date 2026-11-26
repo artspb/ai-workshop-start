@@ -1,0 +1,292 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "id": "PR_kwDOV8tIdc8AAAABSJcNOA",
+        "number": 54,
+        "state": "OPEN",
+        "isDraft": false,
+        "isCrossRepository": false,
+        "author": {
+          "login": "jetbrains-air",
+          "__typename": "Bot"
+        },
+        "baseRefName": "main",
+        "headRefName": "issue-53-scanned-before-side-panel",
+        "headRefOid": "36ecf1410e98e38607bd10025b9bdae11c5ed3d3",
+        "mergeable": "MERGEABLE",
+        "mergeStateStatus": "CLEAN",
+        "head": {
+          "nodes": [
+            {
+              "commit": {
+                "oid": "36ecf1410e98e38607bd10025b9bdae11c5ed3d3",
+                "statusCheckRollup": {
+                  "state": "SUCCESS",
+                  "contexts": {
+                    "nodes": [
+                      {
+                        "__typename": "CheckRun",
+                        "name": "test",
+                        "status": "COMPLETED",
+                        "conclusion": "SUCCESS",
+                        "checkSuite": {
+                          "workflowRun": {
+                            "workflow": {
+                              "name": "CI"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "__typename": "CheckRun",
+                        "name": "test",
+                        "status": "COMPLETED",
+                        "conclusion": "SUCCESS",
+                        "checkSuite": {
+                          "workflowRun": {
+                            "workflow": {
+                              "name": "CI"
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "commits": {
+          "totalCount": 2,
+          "nodes": [
+            {
+              "commit": {
+                "messageHeadline": "Scanned before is a side panel, on the left of the box and the result"
+              }
+            },
+            {
+              "commit": {
+                "messageHeadline": "Address review: the panel's title and search stay in view, results wr…"
+              }
+            }
+          ]
+        },
+        "comments": {
+          "nodes": [
+            {
+              "author": {
+                "login": "jetbrains-air",
+                "__typename": "Bot"
+              },
+              "body": "Rebased onto main (9c01e86): Code Review https://github.com/artspb/ai-workshop-start/pull/54#pullrequestreview-6076933828 found nothing on f6533cf, but it was 2 commits behind. It applied cleanly and passes the typecheck, the tests (133) and the smoke scan. To re-review the rebase, compare `git range-diff 9c01e8673d0abeb017f306c74e13923547f346bd f6533cf02915a253e86970065aa5c8ef774ea89c f39d266`, not `git diff f6533cf..f39d266`, which shows only what main gained. Not merged: the new head (f39d266) waits for its review.\n\nProduced by Air Automations. Name: 4. Merge Reviewed / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/1a688c3e-61d6-4269-b253-f1ddec8c719d?run=2c135292-379c-4830-ae19-a1368245093b",
+              "createdAt": "2026-11-26T15:43:05Z"
+            },
+            {
+              "author": {
+                "login": "jetbrains-air",
+                "__typename": "Bot"
+              },
+              "body": "Rebased onto main (d2077ab): Code Review https://github.com/artspb/ai-workshop-start/pull/54#pullrequestreview-6076933828 found nothing on f6533cf, but it was 2 commits behind. The earlier rebase's push never reached GitHub; this one did, and the new head is 36ecf14. It applied cleanly and passes the typecheck, the tests (141) and the smoke scan. To re-review the rebase, compare `git range-diff d2077ab5d686fa13708f31b99a2366894c2b0198 f6533cf02915a253e86970065aa5c8ef774ea89c 36ecf14`, not `git diff f6533cf..36ecf14`, which shows only what main gained. Not merged: the new head waits for its review.\n\nProduced by Air Automations. Name: 4. Merge Reviewed / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/1a688c3e-61d6-4269-b253-f1ddec8c719d?run=2047156b-0729-4bdc-959a-8acd762e7468",
+              "createdAt": "2026-11-26T15:52:29Z"
+            }
+          ]
+        },
+        "reviews": {
+          "nodes": [
+            {
+              "id": "PRR_kwDOV8tIdc8AAAABajVJnQ",
+              "databaseId": 6076844445,
+              "author": {
+                "login": "jetbrains-air",
+                "__typename": "Bot"
+              },
+              "state": "COMMENTED",
+              "viewerDidAuthor": true,
+              "body": "Nothing blocks the merge. The layout does what `spec/web.md` now says, checked in Chromium with 60 stored scans: at 1280 px the panel is at x=16 and stays at y=16 as the result scrolls, the result at x=368 open or collapsed; at 959 px and below it stacks under the box and the status; CI is green. The main risk is the 20rem panel itself: a search result still overflows it, and the title and the search box scroll away with the list. Three suggestions inline.\n\nProduced by Air Automations. Name: 2. Code Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/8d0ab705-e1d8-4895-bf56-42b1c943eb46?run=08c916a1-ec9f-4fe6-a6ef-87ff2756ce87",
+              "submittedAt": "2026-11-26T15:34:39Z",
+              "commit": {
+                "oid": "3d95690fef00d1bd6b00810a13fd6f9ee759131d"
+              },
+              "comments": {
+                "nodes": [
+                  {
+                    "replyTo": null
+                  },
+                  {
+                    "replyTo": null
+                  },
+                  {
+                    "replyTo": null
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRR_kwDOV8tIdc8AAAABajYCTg",
+              "databaseId": 6076891726,
+              "author": {
+                "login": "jetbrains-air",
+                "__typename": "Bot"
+              },
+              "state": "COMMENTED",
+              "viewerDidAuthor": true,
+              "body": "Round 1: all three suggestions are fixed in f6533cf02915a253e86970065aa5c8ef774ea89c. The title and the search box stay at the top of the panel while its list scrolls; a search result wraps; the test now reads the 20rem column. `npm run typecheck`, `npm test` (128 pass) and `./skill-atlas scan ./fixture` pass.\n\nProduced by Air Automations. Name: 3. Address Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/c1da6cbb-a56d-4b33-9d9b-bbbe0ad87586?run=549ebbde-f299-4de9-8b4a-973380e22968\n\n<!-- address-review -->",
+              "submittedAt": "2026-11-26T15:38:25Z",
+              "commit": {
+                "oid": "3d95690fef00d1bd6b00810a13fd6f9ee759131d"
+              },
+              "comments": {
+                "nodes": [
+                  {
+                    "replyTo": {
+                      "id": "PRRC_kwDOV8tIdc8AAAABGMTCyA"
+                    }
+                  },
+                  {
+                    "replyTo": {
+                      "id": "PRRC_kwDOV8tIdc8AAAABGMTC4Q"
+                    }
+                  },
+                  {
+                    "replyTo": {
+                      "id": "PRRC_kwDOV8tIdc8AAAABGMTC6A"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRR_kwDOV8tIdc8AAAABajamxA",
+              "databaseId": 6076933828,
+              "author": {
+                "login": "jetbrains-air",
+                "__typename": "Bot"
+              },
+              "state": "COMMENTED",
+              "viewerDidAuthor": true,
+              "body": "Nothing blocks the merge. A re-review of f6533cf, the one commit pushed on top of 3d95690: all three earlier suggestions are fixed and their threads resolved, checked in Chromium at 1280×800 with 60 stored scans, light and dark. With the panel's list scrolled by 1500 px the title stays at y=32 and the search box at y=64 while the rows pass under them; a search result named `kotlin_multiplatform_compose_resources_migration` wraps (`#history` scrollWidth 320 = clientWidth 320); the result is at x=368 with the panel open and collapsed; at 800 px nothing is sticky. Each new assertion in `tests/web.test.ts` fails when its rule is taken out of `style.css`; `npm run typecheck` and `npm test` (128) pass, and CI is green. No new findings; the two open questions in the description (left or right, 60rem) are the author's, and the spec records the choice made.\n\nProduced by Air Automations. Name: 2. Code Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/8d0ab705-e1d8-4895-bf56-42b1c943eb46?run=9d71572c-75c6-4972-84f6-9f1e201440b1",
+              "submittedAt": "2026-11-26T15:41:42Z",
+              "commit": {
+                "oid": "f6533cf02915a253e86970065aa5c8ef774ea89c"
+              },
+              "comments": {
+                "nodes": []
+              }
+            },
+            {
+              "id": "PRR_kwDOV8tIdc8AAAABajjuzA",
+              "databaseId": 6077083340,
+              "author": {
+                "login": "jetbrains-air",
+                "__typename": "Bot"
+              },
+              "state": "COMMENTED",
+              "viewerDidAuthor": true,
+              "body": "Nothing blocks: a rebase of f6533cf onto main (d2077ab), the pull request's commits unchanged; CI is green.\n\nProduced by Air Automations. Name: 2. Code Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/8d0ab705-e1d8-4895-bf56-42b1c943eb46?run=852d6700-e6bf-47b6-a293-1e76317e65ac",
+              "submittedAt": "2026-11-26T15:53:13Z",
+              "commit": {
+                "oid": "36ecf1410e98e38607bd10025b9bdae11c5ed3d3"
+              },
+              "comments": {
+                "nodes": []
+              }
+            }
+          ]
+        },
+        "reviewThreads": {
+          "nodes": [
+            {
+              "id": "PRRT_kwDOV8tIdc68dUdM",
+              "isResolved": true,
+              "isOutdated": true,
+              "path": "src/web/public/style.css",
+              "line": null,
+              "comments": {
+                "nodes": [
+                  {
+                    "databaseId": 4710515400,
+                    "author": {
+                      "login": "jetbrains-air",
+                      "__typename": "Bot"
+                    },
+                    "body": "**suggestion** A search result with a long unbroken word overflows the 20rem panel: only the `#scans` rows got `overflow-wrap`, the `#found` results did not.\n```\n1280×500, a search result named kotlin_multiplatform_compose_resources_migration (/api/search mocked), \"skill\" typed in the search box\nhappens:  the name is cut at the panel's edge; #history scrollWidth 421 > clientWidth 320, so the panel scrolls sideways\nexpected: it wraps, as a row of the list does (320 = 320 with the lines below)\n```\nOn `main` the panel is 896 px wide and the name fits. One rule for both lists:\n```suggestion\n#history #scans li { padding: 0.25rem 0; font-size: 0.875rem; color: var(--muted); }\n#history li { overflow-wrap: anywhere; }\n```",
+                    "createdAt": "2026-11-26T15:34:39Z"
+                  },
+                  {
+                    "databaseId": 4710555723,
+                    "author": {
+                      "login": "jetbrains-air",
+                      "__typename": "Bot"
+                    },
+                    "body": "Fixed in f6533cf02915a253e86970065aa5c8ef774ea89c: applied the suggestion. `overflow-wrap: anywhere` moved from `#history #scans li` to `#history li`, so a search result wraps as a row does. I reproduced it as you described: at 1280×500, with `/api/search` mocked to return `kotlin_multiplatform_compose_resources_migration` and \"skill\" typed, `#history` had scrollWidth 421 > clientWidth 320 on 3d95690; now it is 320 = 320. `spec/web.md` now says that a long word wraps, in a row and in a search result, and `tests/web.test.ts` checks the rule (it fails without it).\n\nProduced by Air Automations. Name: 3. Address Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/c1da6cbb-a56d-4b33-9d9b-bbbe0ad87586?run=549ebbde-f299-4de9-8b4a-973380e22968\n\n<!-- address-review -->",
+                    "createdAt": "2026-11-26T15:38:23Z"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_kwDOV8tIdc68dUdc",
+              "isResolved": true,
+              "isOutdated": false,
+              "path": "src/web/public/style.css",
+              "line": 66,
+              "comments": {
+                "nodes": [
+                  {
+                    "databaseId": 4710515425,
+                    "author": {
+                      "login": "jetbrains-air",
+                      "__typename": "Bot"
+                    },
+                    "body": "**suggestion** The whole panel scrolls, not its list: the title and the search box scroll out of view with the rows, while the spec says \"its list scrolling on its own\".\n```\n1280×800, 60 stored scans: turn the wheel over the panel (or set #history.scrollTop = 1500)\nhappens:  the summary \"Scanned before\" is at y=-1468 and the search box at y=-1434, out of view\nexpected: the title and the search box stay at the top of the panel; only the rows move\n```\nTo collapse the panel or to search, the user scrolls the list back to its top first. `position: sticky; top: 0` with a background on the summary and the search box, or the scroll on `#scans` and `#found` instead of `#history`, would keep them; or the spec says that the panel scrolls.",
+                    "createdAt": "2026-11-26T15:34:39Z"
+                  },
+                  {
+                    "databaseId": 4710555902,
+                    "author": {
+                      "login": "jetbrains-air",
+                      "__typename": "Bot"
+                    },
+                    "body": "Fixed in f6533cf02915a253e86970065aa5c8ef774ea89c: in a window of 60rem or more, the title and the search box are `position: sticky` inside the panel. The summary is at `top: 0`, with a fixed `height: 2rem` and `background: Canvas`. The search box is at `top: 2rem`, right under it, with a `Canvas` shadow below, so the rows pass under both. Your reproduction (1280×800, 60 stored scans, `#history.scrollTop = 1500`) gave summary y=-1468 and search y=-1434 on 3d95690. Now it gives summary y=32 (the panel's top) and search y=64, while the first row is at y=-1381. `elementFromPoint` at the search box returns `#search`, and a click on the title still collapses the panel, with the result at x=368. Below 60rem nothing changes. The spec now says \"its list scrolling on its own, under its title and the search box, which stay at its top\". The test checks both sticky rules and that the search box's `top` equals the summary's height, and it fails on the old stylesheet.\n\nProduced by Air Automations. Name: 3. Address Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/c1da6cbb-a56d-4b33-9d9b-bbbe0ad87586?run=549ebbde-f299-4de9-8b4a-973380e22968\n\n<!-- address-review -->",
+                    "createdAt": "2026-11-26T15:38:24Z"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_kwDOV8tIdc68dUdi",
+              "isResolved": true,
+              "isOutdated": true,
+              "path": "tests/web.test.ts",
+              "line": null,
+              "comments": {
+                "nodes": [
+                  {
+                    "databaseId": 4710515432,
+                    "author": {
+                      "login": "jetbrains-air",
+                      "__typename": "Bot"
+                    },
+                    "body": "**suggestion** No test holds \"collapsed, the result keeps its place\" (`spec/web.md`): it rests on the fixed `20rem` column, which this assertion does not read.\n```\nstyle.css: grid-template-columns: 20rem minmax(0, 1fr)  →  auto minmax(0, 1fr)\nnode --test tests/web.test.ts   → 19 pass\nin Chromium at 1280×800, 3 stored scans: the result is at x=679 with the panel open, x=194 collapsed\n```\n```suggestion\n  assert.match(wide, /body:has\\(> #history:not\\(\\[hidden\\]\\)\\) \\{[^}]*display: grid;[^}]*grid-template-columns: 20rem [^}]*grid-template-areas: \"side header\" \"side main\";/, 'on the left, beside the box and the result, which keeps its place when the panel collapses');\n```",
+                    "createdAt": "2026-11-26T15:34:39Z"
+                  },
+                  {
+                    "databaseId": 4710556037,
+                    "author": {
+                      "login": "jetbrains-air",
+                      "__typename": "Bot"
+                    },
+                    "body": "Fixed in f6533cf02915a253e86970065aa5c8ef774ea89c: applied the suggestion. The assertion now requires `grid-template-columns: 20rem ` before the grid areas. I checked it your way: with `20rem minmax(0, 1fr)` changed to `auto minmax(0, 1fr)`, `node --test tests/web.test.ts` now fails 1 of 19 (\"...which keeps its place when the panel collapses\"); restored, all 19 pass. In Chromium at 1280×800, the result is at x=368 with the panel open and collapsed.\n\nProduced by Air Automations. Name: 3. Address Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/c1da6cbb-a56d-4b33-9d9b-bbbe0ad87586?run=549ebbde-f299-4de9-8b4a-973380e22968\n\n<!-- address-review -->",
+                    "createdAt": "2026-11-26T15:38:25Z"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

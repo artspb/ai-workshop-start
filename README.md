@@ -18,6 +18,6 @@ http://localhost:4173 ([web view](spec/web.md)); `--port` picks another port. Se
 `npm test` runs the tests; `npm run e2e` scans real repositories at fixed commits and compares with
 [tests/e2e/](tests/e2e/), then the web view's screenshots with [tests/visual/](tests/visual/) ([visual tests](spec/web.md#visual-tests)).
 
-- [spec/](spec/): what it does. [AGENTS.md](AGENTS.md): the definition of done.
+- [spec/](spec/): what it does; [spec/automations.md](spec/automations.md): the review automations. [AGENTS.md](AGENTS.md): the definition of done.
 - [fixture/](fixture/README.md): a small repository for the tests.
 - [qa/](qa/README.md): the web view's test scripts, for a person or the `manual-qa` skill, in a browser.

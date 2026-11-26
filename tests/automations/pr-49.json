@@ -1,0 +1,338 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "id": "PR_kwDOV8tIdc8AAAABSJBxZw",
+        "number": 49,
+        "state": "MERGED",
+        "isDraft": false,
+        "isCrossRepository": false,
+        "author": {
+          "login": "jetbrains-air",
+          "__typename": "Bot"
+        },
+        "baseRefName": "main",
+        "headRefName": "issue-46-scanned-before-above-progress",
+        "headRefOid": "8a2b8c15a9e2dafeb801e8ccd942311e64f2f159",
+        "mergeable": "UNKNOWN",
+        "mergeStateStatus": "UNKNOWN",
+        "head": {
+          "nodes": [
+            {
+              "commit": {
+                "oid": "8a2b8c15a9e2dafeb801e8ccd942311e64f2f159",
+                "statusCheckRollup": {
+                  "state": "SUCCESS",
+                  "contexts": {
+                    "nodes": [
+                      {
+                        "__typename": "CheckRun",
+                        "name": "test",
+                        "status": "COMPLETED",
+                        "conclusion": "SUCCESS",
+                        "checkSuite": {
+                          "workflowRun": {
+                            "workflow": {
+                              "name": "CI"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "__typename": "CheckRun",
+                        "name": "test",
+                        "status": "COMPLETED",
+                        "conclusion": "SUCCESS",
+                        "checkSuite": {
+                          "workflowRun": {
+                            "workflow": {
+                              "name": "CI"
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "commits": {
+          "totalCount": 2,
+          "nodes": [
+            {
+              "commit": {
+                "messageHeadline": "Show Scanned before above the status and the progress bar (#46)"
+              }
+            },
+            {
+              "commit": {
+                "messageHeadline": "Address review: keep the status above Scanned before, move only the bar"
+              }
+            }
+          ]
+        },
+        "comments": {
+          "nodes": []
+        },
+        "reviews": {
+          "nodes": [
+            {
+              "id": "PRR_kwDOV8tIdc8AAAABai7mow",
+              "databaseId": 6076425891,
+              "author": {
+                "login": "jetbrains-air",
+                "__typename": "Bot"
+              },
+              "state": "COMMENTED",
+              "viewerDidAuthor": true,
+              "body": "Nothing blocks the merge. The change matches issue #46, `spec/web.md` is updated with it and the page test covers the new order; `npm run typecheck` and `npm test` (112 pass) are fine on the head, CI is green. The main risk, one suggestion inline: with many stored scans the status moves below the fold together with the bar, so an error after **Scan** is not seen without scrolling. That is the pull request's open question, for a person to decide.\n\nProduced by Air Automations. Name: 2. Code Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/8d0ab705-e1d8-4895-bf56-42b1c943eb46?run=7f879cf2-91bc-41ec-843a-a633f1eaa885",
+              "submittedAt": "2026-11-26T15:05:04Z",
+              "commit": {
+                "oid": "76208a2926968adb719adaf4da06321755134ebc"
+              },
+              "comments": {
+                "nodes": [
+                  {
+                    "replyTo": null
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRR_kwDOV8tIdc8AAAABai9zrQ",
+              "databaseId": 6076461997,
+              "author": {
+                "login": "jetbrains-air",
+                "__typename": "Bot"
+              },
+              "state": "COMMENTED",
+              "viewerDidAuthor": true,
+              "body": "Round 1: one thread, no commit. The status-below-the-fold finding reproduces, but which layout fixes it (status above Scanned before, or scroll it into view) is the pull request's open question, for a person. The review body needs no answer of its own: it says nothing blocks, and its one suggestion is the thread.\n\nProduced by Air Automations. Name: 3. Address Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/c1da6cbb-a56d-4b33-9d9b-bbbe0ad87586?run=25423dc8-a71a-4f5c-a26b-85246f1037e2\n\n<!-- address-review answers:6076425891 -->",
+              "submittedAt": "2026-11-26T15:07:10Z",
+              "commit": {
+                "oid": "76208a2926968adb719adaf4da06321755134ebc"
+              },
+              "comments": {
+                "nodes": [
+                  {
+                    "replyTo": {
+                      "id": "PRRC_kwDOV8tIdc8AAAABGL-Pag"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRR_kwDOV8tIdc8AAAABai-W0g",
+              "databaseId": 6076470994,
+              "author": {
+                "login": "jetbrains-air",
+                "__typename": "Bot"
+              },
+              "state": "COMMENTED",
+              "viewerDidAuthor": true,
+              "body": "Nothing blocks the merge. Re-review of the answer on `76208a2`, no new commit: nothing is fixed, and the one earlier thread (the status and the bar below the fold with a long **Scanned before**, `src/web/public/index.html:31`) stays open. Both sides reproduce it and agree it is a layout choice issue #46 does not settle, so it waits for a person.\n\nProduced by Air Automations. Name: 2. Code Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/8d0ab705-e1d8-4895-bf56-42b1c943eb46?run=1d0f19c0-723e-4d20-ace2-c5da7552a0f2",
+              "submittedAt": "2026-11-26T15:07:39Z",
+              "commit": {
+                "oid": "76208a2926968adb719adaf4da06321755134ebc"
+              },
+              "comments": {
+                "nodes": [
+                  {
+                    "replyTo": {
+                      "id": "PRRC_kwDOV8tIdc8AAAABGL-Pag"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRR_kwDOV8tIdc8AAAABajFqBw",
+              "databaseId": 6076590599,
+              "author": {
+                "login": "artspb",
+                "__typename": "User"
+              },
+              "state": "COMMENTED",
+              "viewerDidAuthor": false,
+              "body": "",
+              "submittedAt": "2026-11-26T15:16:01Z",
+              "commit": {
+                "oid": "76208a2926968adb719adaf4da06321755134ebc"
+              },
+              "comments": {
+                "nodes": [
+                  {
+                    "replyTo": {
+                      "id": "PRRC_kwDOV8tIdc8AAAABGL-Pag"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRR_kwDOV8tIdc8AAAABajGlig",
+              "databaseId": 6076605834,
+              "author": {
+                "login": "artspb",
+                "__typename": "User"
+              },
+              "state": "COMMENTED",
+              "viewerDidAuthor": false,
+              "body": "See below.",
+              "submittedAt": "2026-11-26T15:17:25Z",
+              "commit": {
+                "oid": "76208a2926968adb719adaf4da06321755134ebc"
+              },
+              "comments": {
+                "nodes": [
+                  {
+                    "replyTo": null
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRR_kwDOV8tIdc8AAAABajJQ4g",
+              "databaseId": 6076649698,
+              "author": {
+                "login": "jetbrains-air",
+                "__typename": "Bot"
+              },
+              "state": "COMMENTED",
+              "viewerDidAuthor": true,
+              "body": "Round 2: one commit, `8a2b8c1`. As asked in both threads, the status stays above Scanned before and only the progress bar moved below the list; the spec and the page test match. The review bodies (\"See below.\" and an empty one) need no answer of their own: their request is in the threads.\n\nProduced by Air Automations. Name: 3. Address Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/c1da6cbb-a56d-4b33-9d9b-bbbe0ad87586?run=81a64d0a-908b-4e75-9e44-1be36c5f8a93\n\n<!-- address-review answers:6076605834 -->",
+              "submittedAt": "2026-11-26T15:20:13Z",
+              "commit": {
+                "oid": "76208a2926968adb719adaf4da06321755134ebc"
+              },
+              "comments": {
+                "nodes": [
+                  {
+                    "replyTo": {
+                      "id": "PRRC_kwDOV8tIdc8AAAABGL-Pag"
+                    }
+                  },
+                  {
+                    "replyTo": {
+                      "id": "PRRC_kwDOV8tIdc8AAAABGMG3tg"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRR_kwDOV8tIdc8AAAABajLoyQ",
+              "databaseId": 6076688585,
+              "author": {
+                "login": "jetbrains-air",
+                "__typename": "Bot"
+              },
+              "state": "COMMENTED",
+              "viewerDidAuthor": true,
+              "body": "Nothing blocks the merge. Re-review of `8a2b8c1`: it does what was asked in both threads, `#status` stays right under the box and only the bar moved below **Scanned before**, with `spec/web.md` and the page test saying the same; `npm run typecheck` and `npm test` (112 pass) are fine on the head, CI is green. My earlier finding is fixed and its thread resolved: with 40 stored scans in a 1280×800 window the error after **Scan** is at y = 175, not scrolled (it was 1448), and the bar, below the open list as issue #46 asks, is at y = 253 once the list is collapsed. The other thread is the reviewer's own and is theirs to resolve; the description and its demo still show the first layout, the threads record the change.\n\nProduced by Air Automations. Name: 2. Code Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/8d0ab705-e1d8-4895-bf56-42b1c943eb46?run=b8d50d60-3b3d-492c-a698-831edabfc82e\n",
+              "submittedAt": "2026-11-26T15:23:08Z",
+              "commit": {
+                "oid": "8a2b8c15a9e2dafeb801e8ccd942311e64f2f159"
+              },
+              "comments": {
+                "nodes": []
+              }
+            }
+          ]
+        },
+        "reviewThreads": {
+          "nodes": [
+            {
+              "id": "PRRT_kwDOV8tIdc68ciTg",
+              "isResolved": true,
+              "isOutdated": true,
+              "path": "src/web/public/index.html",
+              "line": null,
+              "comments": {
+                "nodes": [
+                  {
+                    "databaseId": 4710174570,
+                    "author": {
+                      "login": "jetbrains-air",
+                      "__typename": "Bot"
+                    },
+                    "body": "**suggestion** With a long **Scanned before**, open as it is at first, the status and the bar are now below the fold: after **Scan** nothing visible changes but the **Stop** button, and an error is not seen at all. Before this change both were right under the box.\n\nTo reproduce, in a 1280×800 window: `./skill-atlas serve`, with 40 stored scans (one scan of an organization with 40 repositories stores that many; I answered `/api/scans` with 40 rows in Playwright), then scan `/no/such/directory`:\n```\nhappens:  #status \"Not a GitHub URL or a readable directory: /no/such/directory\" at y = 1448, the page not scrolled (scrollY 0);\n          while it runs, \"Scanning …\" at y = 1448 and the bar at y = 1492\nexpected: the status, an error above all, seen without scrolling, as on main\n```\nIssue #46 asks for this for the bar (\"It's collapsible, so it shouldn't be a problem\"), not for the status, so this is the pull request's own open question, and a person's call. Two ways out: keep `#status` above Scanned before and move only the bar; or keep this order and scroll the status into view when it is shown (`showStatus` in `src/web/public/app.js:161`).\n\nProduced by Air Automations. Name: 2. Code Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/8d0ab705-e1d8-4895-bf56-42b1c943eb46?run=7f879cf2-91bc-41ec-843a-a633f1eaa885",
+                    "createdAt": "2026-11-26T15:05:04Z"
+                  },
+                  {
+                    "databaseId": 4710199209,
+                    "author": {
+                      "login": "jetbrains-air",
+                      "__typename": "Bot"
+                    },
+                    "body": "**Not changed**: this is a choice for a person, not a defect to fix here.\n\nThe finding holds. On `76208a2`, in a 1280×800 Chromium window, with `./skill-atlas serve`, `/api/scans` answered with 40 rows (Playwright `page.route`), and `/no/such/directory` scanned:\n```\n{ text: 'Not a GitHub URL or a readable directory: /no/such/directory', y: 1448, scrollY: 0, innerHeight: 800 }\n```\nSo the error is below the fold, unseen without scrolling.\n\nBut the fix is a layout decision that issue #46 does not settle. It asks only that the bar move (\"It's collapsible, so it shouldn't be a problem\"). `spec/web.md` on this branch puts Scanned before \"before the status, the progress bar and the result\", and the pull request's open question asks the same thing. The two ways out you name, `#status` above Scanned before with only the bar moved, or this order with `showStatus` scrolling the status into view, each change that spec line or add behaviour. I'm leaving the choice to a person. Whichever they pick, the spec, the page test in `tests/web.test.ts` and the code change together.\n\nProduced by Air Automations. Name: 3. Address Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/c1da6cbb-a56d-4b33-9d9b-bbbe0ad87586?run=25423dc8-a71a-4f5c-a26b-85246f1037e2\n\n<!-- address-review -->",
+                    "createdAt": "2026-11-26T15:07:09Z"
+                  },
+                  {
+                    "databaseId": 4710205514,
+                    "author": {
+                      "login": "jetbrains-air",
+                      "__typename": "Bot"
+                    },
+                    "body": "Stays open: we agree on the finding and that the choice is a person's, so there is nothing more for a bot to settle here. For whoever decides: `#status` above Scanned before with only the bar moved, or this order with the status scrolled into view when shown; or resolve the thread to keep the layout as it is. The spec line, the page test and the code change together either way.\n\nProduced by Air Automations. Name: 2. Code Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/8d0ab705-e1d8-4895-bf56-42b1c943eb46?run=1d0f19c0-723e-4d20-ace2-c5da7552a0f2\n\n<!-- code-review: stays open -->",
+                    "createdAt": "2026-11-26T15:07:39Z"
+                  },
+                  {
+                    "databaseId": 4710303386,
+                    "author": {
+                      "login": "artspb",
+                      "__typename": "User"
+                    },
+                    "body": "Keep #status above Scanned before and move only the progress bar below the list. Update spec/web.md and the page test to match.",
+                    "createdAt": "2026-11-26T15:16:01Z"
+                  },
+                  {
+                    "databaseId": 4710352084,
+                    "author": {
+                      "login": "jetbrains-air",
+                      "__typename": "Bot"
+                    },
+                    "body": "Fixed in 8a2b8c1: `#status` stays right under the box, above Scanned before; only `#progress` moved, after the list and before `#result`. `spec/web.md` now says \"Under the box and the status, before the progress bar and the result\", and the page test in `tests/web.test.ts` checks form < `#status` < Scanned before < `#progress`, `#result`. It fails on `76208a2` (\"under the status\") and passes now.\n\nChecked with the earlier reproduction: a 1280×800 Chromium window, `./skill-atlas serve`, `/api/scans` answered with 40 rows, `/no/such/directory` scanned:\n```\n{ text: 'Not a GitHub URL or a readable directory: /no/such/directory', y: 175, scrollY: 0, historyTop: 223 }\n```\nBefore this change the status was at y = 1448. `npm run typecheck`, `npm test` (112 pass) and `./skill-atlas scan ./fixture` are fine.\n\nProduced by Air Automations. Name: 3. Address Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/c1da6cbb-a56d-4b33-9d9b-bbbe0ad87586?run=81a64d0a-908b-4e75-9e44-1be36c5f8a93\n\n<!-- address-review -->",
+                    "createdAt": "2026-11-26T15:20:11Z"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_kwDOV8tIdc68c3Qx",
+              "isResolved": false,
+              "isOutdated": true,
+              "path": "src/web/public/index.html",
+              "line": null,
+              "comments": {
+                "nodes": [
+                  {
+                    "databaseId": 4710315958,
+                    "author": {
+                      "login": "artspb",
+                      "__typename": "User"
+                    },
+                    "body": "Keep #status above Scanned before and move only the progress bar below the list. Update spec/web.md and the page test to match.",
+                    "createdAt": "2026-11-26T15:17:08Z"
+                  },
+                  {
+                    "databaseId": 4710352257,
+                    "author": {
+                      "login": "jetbrains-air",
+                      "__typename": "Bot"
+                    },
+                    "body": "Fixed in 8a2b8c1: `#status` stays right under the box, above Scanned before; only `#progress` moved, after the list and before `#result`. `spec/web.md` now says \"Under the box and the status, before the progress bar and the result\", and the page test in `tests/web.test.ts` checks form < `#status` < Scanned before < `#progress`, `#result`. It fails on `76208a2` (\"under the status\") and passes now.\n\nChecked with the earlier reproduction: a 1280×800 Chromium window, `./skill-atlas serve`, `/api/scans` answered with 40 rows, `/no/such/directory` scanned:\n```\n{ text: 'Not a GitHub URL or a readable directory: /no/such/directory', y: 175, scrollY: 0, historyTop: 223 }\n```\nBefore this change the status was at y = 1448. `npm run typecheck`, `npm test` (112 pass) and `./skill-atlas scan ./fixture` are fine.\n\nProduced by Air Automations. Name: 3. Address Review / Run: https://air.jetbrains.cloud/org/05cf1a7f-6ab5-713b-abd3-29d0c8a05e2d/automations/c1da6cbb-a56d-4b33-9d9b-bbbe0ad87586?run=81a64d0a-908b-4e75-9e44-1be36c5f8a93\n\n<!-- address-review -->",
+                    "createdAt": "2026-11-26T15:20:12Z"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
