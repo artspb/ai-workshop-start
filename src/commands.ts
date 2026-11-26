@@ -1,6 +1,6 @@
 // The skill-atlas commands. Everything that differs between the CLI and the tests comes in
 // through the context.
-import { AtlasError } from './core/errors.ts';
+import { AtlasError, RateLimited } from './core/errors.ts';
 import { firstSentence, skillLink, type Repository, type Skill } from './core/model.ts';
 import { scanOrganization, type Organization } from './core/organization.ts';
 import { scan, type Source, type Store } from './core/scan.ts';
@@ -40,7 +40,7 @@ export async function run(args: string[], context: Context): Promise<number> {
     return 0;
   } catch (error) {
     if (!(error instanceof AtlasError)) throw error;
-    context.error(error.message);
+    context.error(error instanceof RateLimited ? rateLimitText(error) : error.message);
     return 1;
   }
 }
@@ -81,6 +81,20 @@ async function printOrganization(organization: Organization, context: Context) {
   for (const { id, result, error } of scans) {
     for (const warning of result ? result.warnings : [error]) context.error(`warning: ${id}: ${warning}`);
   }
+}
+
+/**
+ * The rate limit with when it resets, in the terminal's time zone, `HH:MM`; both rounded up to the
+ * minute, so trying at the time shown works. No reset time: the core's message.
+ */
+function rateLimitText({ resetsAt, token, message }: RateLimited, now = Date.now()): string {
+  if (!resetsAt) return message;
+  const minute = 60_000;
+  const at = new Date(Math.ceil(resetsAt.getTime() / minute) * minute);
+  const minutes = Math.max(1, Math.ceil((resetsAt.getTime() - now) / minute));
+  const time = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+  const resets = `it resets at ${time} (in ${count(minutes, 'minute', 'minutes')})`;
+  return `GitHub rate limit reached; ${token ? resets : `set GITHUB_TOKEN, or wait: ${resets}`}`;
 }
 
 function count(n: number, one: string, many: string): string {

@@ -172,7 +172,7 @@ test('the rate limit in one repository: the scan stops, exit code 1', async () =
   });
   assert.equal(scanned.code, 1);
   assert.equal(scanned.stdout, '');
-  assert.equal(scanned.stderr, 'GitHub rate limit reached; try again in a minute');
+  assert.equal(scanned.stderr, 'GitHub rate limit reached; try again later');
   // It stops: the repositories not started yet are not asked for, not even later.
   await new Promise((resolve) => setTimeout(resolve, 100));
   assert.ok(!scanned.asked.includes(`${API}/repos/JetBrains/zeta`), 'the last repository was not scanned');
@@ -183,7 +183,7 @@ test('a rate limit on a file read: the scan stops, exit code 1', async () => {
   const scanned = await atlas(['scan', 'github.com/JetBrains'], { github: recording({ [file]: { status: 429, body: '429: Too Many Requests' } }) });
   assert.equal(scanned.code, 1);
   assert.equal(scanned.stdout, '');
-  assert.equal(scanned.stderr, 'GitHub rate limit reached; try again in a minute');
+  assert.equal(scanned.stderr, 'GitHub rate limit reached; try again later');
 });
 
 test('a rejected token: the scan stops, exit code 1', async () => {
@@ -391,7 +391,7 @@ test('the web view, an organization that cannot be scanned: no such owner, the r
   const limited = { status: 403, body: { message: 'API rate limit exceeded for user ID 1.' } };
   assert.deepEqual(await (await serve(t, { github: recording({ [`${API}/repos/JetBrains/repo-50`]: limited }) }))('github.com/JetBrains'), {
     status: 400,
-    body: { error: 'GitHub rate limit reached; try again in a minute' },
+    body: { error: 'GitHub rate limit reached; try again later', rateLimit: { resetsAt: null, token: true } },
   });
   const rejected = { status: 401, body: { message: 'Bad credentials' } };
   assert.deepEqual(await (await serve(t, { github: recording({ [`${API}/repos/JetBrains/Alpha`]: rejected }) }))('github.com/JetBrains'), {
@@ -520,7 +520,7 @@ test('the web view, &progress: no such owner, a repository → JSON, as without 
   assert.equal(failed.type, 'application/x-ndjson; charset=utf-8');
   assert.deepEqual(failed.lines[0], { progress: { scanned: 0, repositories: 101 } });
   assert.ok(failed.lines.slice(0, -1).every((line: any) => line.progress && line.progress.scanned < 101));
-  assert.deepEqual(failed.lines.at(-1), { error: 'GitHub rate limit reached; try again in a minute' });
+  assert.deepEqual(failed.lines.at(-1), { error: 'GitHub rate limit reached; try again later', rateLimit: { resetsAt: null, token: true } });
 });
 
 test('the page reads the progress, then the answer; a repository and a stored scan as JSON', async (t) => {

@@ -1,4 +1,4 @@
-import { AtlasError, GitHubUnavailable } from './errors.ts';
+import { AtlasError, GitHubUnavailable, RateLimited, resetTime } from './errors.ts';
 import { SKILL_ROOTS } from './find.ts';
 import type { Organization } from './organization.ts';
 import type { Source } from './scan.ts';
@@ -253,15 +253,17 @@ function client({ fetch, token }: GitHubOptions) {
     const message = (body as { message?: unknown } | undefined)?.message;
     const text = typeof message === 'string' ? message : '';
     if (response.status === 404) throw new AtlasError(notFound);
-    if ((response.status === 403 || response.status === 429) && /rate limit/i.test(text)) throw rateLimit();
-    throw failure(response.status, url, text);
+    if ((response.status === 403 || response.status === 429) && /rate limit/i.test(text)) throw rateLimit(response);
+    throw failure(response, url, text);
   }
 
-  const rateLimit = () => new GitHubUnavailable(`GitHub rate limit reached; ${token ? 'try again in a minute' : 'set GITHUB_TOKEN'}`);
+  /** The rate limit, with when it resets if the refusal says so. */
+  const rateLimit = (response: Response) => new RateLimited(resetTime(response.headers), Boolean(token));
 
   /** GitHub answers no more requests: these stop an organization scan. Any other failure is one repository's. */
-  function failure(status: number, url: string, text = ''): AtlasError {
-    if (status === 429) return rateLimit();
+  function failure(response: Response, url: string, text = ''): AtlasError {
+    const { status } = response;
+    if (status === 429) return rateLimit(response);
     if (status === 401) return new GitHubUnavailable('GitHub rejected the token in GITHUB_TOKEN');
     return new AtlasError(`GitHub answered ${status} for ${url}${text && `: ${text}`}`);
   }
@@ -279,10 +281,11 @@ function client({ fetch, token }: GitHubOptions) {
       if (response.status === 404) {
         // The file host answers 404, not 401, for a token it does not accept: a token that stopped
         // working would make every file "not found". The API tells; `/rate_limit` costs no request.
-        if (token && (await get(`${API}/rate_limit`, { headers })).status === 401) throw failure(401, url);
+        const check = token ? await get(`${API}/rate_limit`, { headers }) : undefined;
+        if (check?.status === 401) throw failure(check, url);
         return undefined;
       }
-      if (!response.ok) throw failure(response.status, url);
+      if (!response.ok) throw failure(response, url);
       return new Uint8Array(await response.arrayBuffer());
     },
   };
