@@ -32,7 +32,9 @@ a { color: var(--accent); }
 .link, .copies { font-size: 0.875rem; color: var(--muted); overflow-wrap: anywhere; }
 .copy { margin-left: 0.5rem; padding: 0 0.5rem; font-size: 0.8rem; }
 #warnings li { color: var(--error); font-size: 0.875rem; font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
-#history h2 { font-size: 1.1rem; margin: 2rem 0 0.5rem; }
+#history { margin-top: 1.5rem; }
+#history summary { cursor: pointer; }
+#history h2 { display: inline; font-size: 1.1rem; }
 #history ul { list-style: none; padding: 0; }
 #history li { padding: 0.25rem 0; font-size: 0.875rem; color: var(--muted); }
 #history li a { font-weight: 600; }

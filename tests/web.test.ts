@@ -44,6 +44,15 @@ test('the page: a box, Scan, a filter, the warnings and the scans before, as HTM
   }
 });
 
+test('the page: Scanned before comes before the status and the result, and collapses; open at first', async () => {
+  const html = await (await fetch(`${base}/`)).text();
+  const history = html.indexOf('<details id="history" open hidden>');
+  assert.ok(history > 0, 'Scanned before is a <details>, open');
+  assert.ok(history < html.indexOf('id="status"'), 'before the status');
+  assert.ok(history < html.indexOf('id="result"'), 'before the result');
+  assert.match(html.slice(history), /^<details id="history" open hidden>\s*<summary><h2>Scanned before<\/h2><\/summary>/);
+});
+
 test('an unknown path: 404; nothing else from disk', async () => {
   for (const path of ['/nope', '/index.html', '/../package.json', '/server.ts']) {
     assert.equal((await fetch(`${base}${path}`)).status, 404, path);
