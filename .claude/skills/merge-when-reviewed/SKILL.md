@@ -153,10 +153,11 @@ keeps both; `tests/e2e/*.txt` are rewritten only as `issue-to-pr` says, never by
 Then `git add <file>` and `git rebase --continue`, keeping each commit's message.
 
 ### Verify
-The rebased branch, without a write token in its environment; `gh` keeps its token for posting.
+The rebased branch, without a write token in its environment; `gh` keeps its token for posting, and Playwright its
+browsers' folder, so the Chromium of `.air/cloud/startup.sh` is found under the new `HOME`.
 CI runs `npm run e2e` with its own token. A skill copy in `.agents/skills` and `.claude/skills` stays byte-identical.
 ```sh
-env -i PATH="$PATH" HOME="$(mktemp -d)" sh -c 'npm ci && npm run typecheck && npm test && ./skill-atlas scan ./fixture'
+env -i PATH="$PATH" PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" HOME="$(mktemp -d)" sh -c 'npm ci && npm run typecheck && npm test && ./skill-atlas scan ./fixture'
 git range-diff origin/<baseRefName> <headRefOid> HEAD
 ```
 The range-diff shows what the rebase changed in the pull request's own commits: only what the conflict required,
