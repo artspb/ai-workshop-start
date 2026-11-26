@@ -33,3 +33,12 @@ for (const script of scripts) {
     });
   });
 }
+
+// A quota's limit is the token's, kept by GitHub (5,000 for a person's token, more for others):
+// said in words, never quoted as text the page must show (qa/README.md#writing-a-new-script).
+for (const script of scripts) {
+  test(`qa/${script}: quotes no quota's limit, says it in words`, () => {
+    const quoted = [...read(script).matchAll(/"([^"\n]*)"/g)].map(([, text]) => text);
+    for (const text of quoted) assert.doesNotMatch(text, /\bof [\d,]+ (points )?left\b/, `"${text}" quotes a limit GitHub keeps`);
+  });
+}
