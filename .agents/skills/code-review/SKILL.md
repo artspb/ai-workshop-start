@@ -39,7 +39,7 @@ gh api repos/{owner}/{repo}/pulls/<n>/comments    # earlier inline comments
   history: a checkout can be shallow, and a shallow one finds no merge base.
   ```sh
   git fetch $(git rev-parse --is-shallow-repository | grep -qx true && echo --unshallow) \
-    origin <baseRefName> <last reviewed commit> <head>
+    origin +refs/heads/<baseRefName>:refs/remotes/origin/<baseRefName> <last reviewed commit> <head>
   git merge-base --is-ancestor <last reviewed commit> <head>    # 0: pushed on top; 1: force-pushed
   ```
   - **Pushed on top**: `git diff <last reviewed commit>..<head>`.
@@ -47,6 +47,8 @@ gh api repos/{owner}/{repo}/pulls/<n>/comments    # earlier inline comments
     Review `git range-diff <merge base> <last reviewed commit> <head>`, with `git merge-base origin/<baseRefName> <head>`
     as `<merge base>`, and the files it names (`## <path> ##`, `@@ <path>:`), read at the head.
     Only `=` lines (`1:  d08d8e4 = 1:  46ce4b6`): the rebase changed none of the pull request's commits; say so in the summary.
+    A `>` line (`-:  ------- > 2:  7ab3630`) is a commit the head added, or one rewritten so much it no longer pairs;
+    the range-diff shows no diff for it: review `git show <its commit>`.
 
   Don't repeat an open comment. Settle your earlier threads (section 4) and say in the summary which earlier findings
   are fixed and which threads stay open.
