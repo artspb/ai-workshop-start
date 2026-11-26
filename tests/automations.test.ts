@@ -3,9 +3,12 @@
 // pull request is its recording cut at that time (`at`): the reviews, comments and thread replies up to it.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
+import { parse } from 'yaml';
 
 const REPOSITORY = fileURLToPath(new URL('..', import.meta.url));
 const SCRIPTS = `${REPOSITORY}scripts/`;
@@ -145,12 +148,20 @@ test('a person commented on the bot\'s completed pull request: no merge, it is t
   assert.match(d.reason, /a person commented/);
 });
 
-test('start Code Review on a new head: opened, synchronize', () => {
-  for (const action of ['opened', 'synchronize']) {
-    const d = decide(recording(55), { event: 'pull_request', action });
-    assert.equal(d.decision, 'start', action);
-    assert.deepEqual(d.start, ['code-review']);
+test('start Code Review on a new head: opened, synchronize, a conflicting pull request too', () => {
+  const conflicting = recorded(55, (pr) => Object.assign(pr, { state: 'OPEN', mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY' }));
+  for (const answer of [recording(55), conflicting]) {
+    for (const action of ['opened', 'synchronize']) {
+      const d = decide(answer, { event: 'pull_request_target', action });
+      assert.equal(d.decision, 'start', action);
+      assert.deepEqual(d.start, ['code-review']);
+    }
   }
+});
+
+test('reopened: start Code Review on a head it has not reviewed; merge a completed review', () => {
+  assert.deepEqual(decide(recording(55), { event: 'pull_request_target', action: 'reopened' }).start, ['code-review']);
+  assert.equal(decide(recorded(COMPLETED), { event: 'pull_request_target', action: 'reopened', behind: 0 }).decision, 'merge');
 });
 
 test('start Address Review: Code Review\'s review left an unanswered thread', () => {
@@ -202,6 +213,30 @@ test('nothing on a closed or merged pull request', () => {
   const d = decide(recording(57), { review: 6077059626, behind: 0 });
   assert.equal(d.decision, 'nothing');
   assert.match(d.reason, /merged/);
+  const closed = decide(recorded(57, (pr) => { pr.state = 'CLOSED'; }), { review: 6077059626, behind: 0 });
+  assert.equal(closed.decision, 'nothing');
+  assert.match(closed.reason, /closed/);
+});
+
+test('nothing for Address Review on a fork\'s pull request, though a thread is unanswered', () => {
+  const { time, head, review } = PR55_FIRST_REVIEW;
+  const d = decide(at(55, time, head, (pr) => Object.assign(pr, { isCrossRepository: true })), { review });
+  assert.equal(d.decision, 'nothing', d.reason);
+});
+
+test('a completed review in another merge state: nothing; how far behind unknown: wait', () => {
+  const blocked = recorded(COMPLETED, (pr) => Object.assign(pr, { mergeable: 'MERGEABLE', mergeStateStatus: 'BLOCKED' }));
+  const d = decide(blocked, { review: LIGHT_CHECK, behind: 0 });
+  assert.equal(d.decision, 'nothing', d.reason);
+  assert.match(d.reason, /MERGEABLE, BLOCKED/);
+  assert.equal(decide(recorded(COMPLETED), { review: LIGHT_CHECK }).decision, 'wait');
+});
+
+test('a completed review whose summary states a finding with no path:line and no label is merged as it is', () => {
+  const answer = recorded(COMPLETED, (pr) => {
+    pr.reviews.nodes.at(-1)!.body = 'Nothing blocks the merge. The main risk is small: a long name may wrap in the panel.';
+  });
+  assert.equal(decide(answer, { review: LIGHT_CHECK, behind: 0 }).decision, 'merge');
 });
 
 test('workflow_dispatch on a head Code Review has not reviewed: start Code Review; a review event on it: nothing', () => {
@@ -235,4 +270,121 @@ test('the skills and the workflow run the shared scripts, and the workflow decid
   assert.match(decide, /decide\.jq/);
   assert.match(workflow, /ref: main/);
   for (const secret of ['AIR_WEBHOOK_CODE_REVIEW', 'AIR_WEBHOOK_ADDRESS_REVIEW', 'AIR_WEBHOOK_MERGE']) assert.match(workflow, new RegExp(secret));
+});
+
+/** A directory for a fake `gh` (answering with `answer`, `behind` commits) and a `sleep` that returns at once. */
+function fakes(answer: Answer, behind: number): { dir: string; log: string } {
+  const dir = mkdtempSync(join(tmpdir(), 'decide-'));
+  const log = join(dir, 'gh.log');
+  writeFileSync(join(dir, 'pr.answer.json'), JSON.stringify(answer));
+  writeFileSync(join(dir, 'gh'), `#!/bin/sh
+echo "$*" >> '${log}'
+case "$2" in
+  graphql) cat '${dir}/pr.answer.json' ;;
+  */git/ref/*) echo 9c01e86b09f4a2f5c1d0e6e8d1c4b2a3f5e6d7c8 ;;
+  */compare/*) echo ${behind} ;;
+esac
+`);
+  writeFileSync(join(dir, 'sleep'), '#!/bin/sh\n');
+  chmodSync(join(dir, 'gh'), 0o755);
+  chmodSync(join(dir, 'sleep'), 0o755);
+  return { dir, log };
+}
+
+/** `scripts/decide.sh` with the fakes: its decision and how many times it read the pull request. */
+function decideSh(answer: Answer, behind: number, tries: number): { decision: Decision & { base_sha: string }; reads: number } {
+  const { dir, log } = fakes(answer, behind);
+  const out = execFileSync(`${SCRIPTS}decide.sh`, ['54', 'pull_request_review', 'submitted', String(LIGHT_CHECK)], {
+    cwd: dir, encoding: 'utf8',
+    env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, GITHUB_REPOSITORY: 'artspb/ai-workshop-start', TRIES: String(tries) },
+  });
+  const reads = readFileSync(log, 'utf8').split('\n').filter((line) => line.startsWith('api graphql')).length;
+  return { decision: JSON.parse(out), reads };
+}
+
+test('decide.sh: one read, the decision with the base commit; a wait that lasts every read becomes nothing', () => {
+  const merge = decideSh(recorded(COMPLETED), 0, 3);
+  assert.equal(merge.decision.decision, 'merge', merge.decision.reason);
+  assert.equal(merge.decision.base_sha, '9c01e86b09f4a2f5c1d0e6e8d1c4b2a3f5e6d7c8');
+  assert.equal(merge.reads, 1);
+  const running = recorded(COMPLETED, (pr) => pr.head.nodes[0].commit.statusCheckRollup.contexts.nodes.push(check('test', 'CI', 'IN_PROGRESS', null)));
+  const waited = decideSh(running, 0, 3);
+  assert.equal(waited.decision.decision, 'nothing');
+  assert.match(waited.decision.reason, /^still waiting: the review is completed, the checks on 36ecf14 are running$/);
+  assert.equal(waited.reads, 3);
+});
+
+/** git in `cwd`, as a person named `name`, with no global configuration. */
+function git(cwd: string, args: string[], name = 'Someone'): string {
+  return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env,
+    GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1', GIT_AUTHOR_NAME: name, GIT_AUTHOR_EMAIL: `${name}@example.com`,
+    GIT_COMMITTER_NAME: name, GIT_COMMITTER_EMAIL: `${name}@example.com` } }).trim();
+}
+
+/** `scripts/rebase.sh` in `cwd`: its exit code and the new head it printed. */
+function rebase(cwd: string, name: string, branch: string, head: string, base: string): { code: number; out: string } {
+  try {
+    return { code: 0, out: execFileSync(`${SCRIPTS}rebase.sh`, [branch, head, base], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1', GIT_AUTHOR_NAME: name, GIT_AUTHOR_EMAIL: `${name}@example.com` } }).trim() };
+  } catch (error) {
+    const e = error as { status: number; stdout: string };
+    return { code: e.status, out: e.stdout.trim() };
+  }
+}
+
+test('rebase.sh: the same commits in two clones; a conflict exits 2, aborted; a moved branch exits 3; the lease refuses another head', () => {
+  const root = mkdtempSync(join(tmpdir(), 'rebase-'));
+  const origin = join(root, 'origin.git');
+  const work = join(root, 'work');
+  git(root, ['init', '-q', '--bare', '-b', 'main', origin]);
+  git(root, ['clone', '-q', origin, work]);
+  const commit = (file: string, text: string, message: string) => {
+    writeFileSync(join(work, file), text);
+    git(work, ['add', file]);
+    git(work, ['commit', '-q', '-m', message]);
+    return git(work, ['rev-parse', 'HEAD']);
+  };
+  git(work, ['checkout', '-q', '-b', 'main']);
+  commit('a.txt', 'a\n', 'A');
+  git(work, ['push', '-q', 'origin', 'main']);
+  git(work, ['checkout', '-q', '-b', 'feat']);
+  const feat = commit('f.txt', 'f\n', 'F');
+  git(work, ['checkout', '-q', 'main']);
+  git(work, ['checkout', '-q', '-b', 'conf']);
+  const conf = commit('a.txt', 'conf\n', 'C');
+  git(work, ['checkout', '-q', 'main']);
+  const base = commit('a.txt', 'b\n', 'B');
+  git(work, ['push', '-q', 'origin', 'main', 'feat', 'conf']);
+
+  const clones = ['One', 'Two'].map((name) => {
+    const clone = join(root, name);
+    git(root, ['clone', '-q', origin, clone], name);
+    return { clone, name };
+  });
+  const heads = clones.map(({ clone, name }) => rebase(clone, name, 'feat', feat, base));
+  for (const { code } of heads) assert.equal(code, 0);
+  assert.match(heads[0].out, /^[0-9a-f]{40}$/);
+  assert.equal(heads[0].out, heads[1].out, 'the same commit in both clones');
+  const [{ clone }] = clones;
+  assert.equal(git(clone, ['rev-parse', `${heads[0].out}^`]), base);
+
+  assert.equal(rebase(clone, 'One', 'conf', conf, base).code, 2);
+  assert.equal(existsSync(join(clone, '.git', 'rebase-merge')) || existsSync(join(clone, '.git', 'rebase-apply')), false, 'aborted');
+  assert.equal(rebase(clone, 'One', 'feat', conf, base).code, 3);
+
+  git(clone, ['checkout', '-q', '--detach', heads[0].out]);
+  assert.throws(() => git(clone, ['push', '-q', `--force-with-lease=feat:${conf}`, 'origin', 'HEAD:refs/heads/feat']));
+  git(clone, ['push', '-q', `--force-with-lease=feat:${feat}`, 'origin', 'HEAD:refs/heads/feat']);
+  assert.equal(git(origin, ['rev-parse', 'refs/heads/feat']), heads[0].out);
+});
+
+test('the workflow: a new head is pull_request_target; a merge the token may not make starts Merge Reviewed', () => {
+  const workflow = parse(readFileSync(`${REPOSITORY}.github/workflows/automations.yml`, 'utf8'));
+  assert.deepEqual(Object.keys(workflow.on), ['pull_request_target', 'pull_request_review', 'workflow_dispatch']);
+  assert.deepEqual(workflow.on.pull_request_target.types, ['opened', 'synchronize', 'reopened']);
+  const [merge] = workflow.jobs.merge.steps.filter((step: { name?: string }) => step.name === 'Merge');
+  assert.equal(merge.env.AIR_WEBHOOK_MERGE, '${{ secrets.AIR_WEBHOOK_MERGE }}');
+  assert.match(merge.run, /if \[ "\$now" = "OPEN \$HEAD" \]; then[\s\S]*"\$AIR_WEBHOOK_MERGE"/);
+  for (const job of Object.values(workflow.jobs) as { steps: { uses?: string; with?: { ref?: string } }[] }[])
+    for (const step of job.steps.filter((s) => s.uses?.startsWith('actions/checkout'))) assert.equal(step.with?.ref, 'main');
 });

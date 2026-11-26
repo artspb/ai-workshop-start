@@ -3,9 +3,11 @@
 # date here, without an agent; start an Air automation (its webhook) only when there is work for one.
 # The pull request's code never runs with a secret: the decision checks out main, not the pull request, and the
 # rebase is tested in a job of its own, without a write token; the push job runs git only.
+# A new head is pull_request_target, not pull_request: GitHub runs no pull_request workflow on a pull request that
+# conflicts with its base, and pull_request_target runs main's copy of this file, never the pull request's.
 name: Automations
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
   pull_request_review:
     types: [submitted]
@@ -94,6 +96,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           HEAD: ${{ needs.decide.outputs.head }}
           REVIEW: ${{ needs.decide.outputs.review }}
+          AIR_WEBHOOK_MERGE: ${{ secrets.AIR_WEBHOOK_MERGE }}
         run: |
           # Read again right before merging: a review may have arrived meanwhile.
           TRIES=10 scripts/decide.sh "$N" workflow_dispatch "" > decision.json
@@ -102,8 +105,19 @@ jobs:
           fi
           # --match-head-commit refuses a head that moved since the review.
           gh pr merge "$N" -R "$GITHUB_REPOSITORY" --rebase --delete-branch --match-head-commit "$HEAD" || true
-          if [ "$(gh pr view "$N" -R "$GITHUB_REPOSITORY" --json state --jq .state)" != MERGED ]; then
-            echo "Not merged: GitHub refused the merge of ${HEAD:0:7}" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0
+          now=$(gh pr view "$N" -R "$GITHUB_REPOSITORY" --json state,headRefOid --jq '.state + " " + .headRefOid')
+          if [ "${now%% *}" != MERGED ]; then
+            echo "Not merged: GitHub refused the merge of ${HEAD:0:7}" | tee -a "$GITHUB_STEP_SUMMARY"
+            # Refused while still open on the reviewed head: not a new head (that one starts Code Review), but this token,
+            # which may not merge a change to .github/workflows. Merge Reviewed, with its own token, merges it instead.
+            if [ "$now" = "OPEN $HEAD" ]; then
+              if [ -z "$AIR_WEBHOOK_MERGE" ]; then echo "::warning::Merge Reviewed not started: AIR_WEBHOOK_MERGE is not set"; exit 0; fi
+              reason="the review of ${HEAD:0:7} is completed, but the workflow's token may not merge it: Merge Reviewed merges it"
+              jq -n --argjson n "$N" --arg reason "$reason" '{ pull_request: $n, reason: $reason }' \
+                | curl -fsS --retry 3 -X POST -H 'Content-Type: application/json' --data @- "$AIR_WEBHOOK_MERGE" > /dev/null
+              echo "Started Merge Reviewed: $reason" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            exit 0
           fi
           gh pr comment "$N" -R "$GITHUB_REPOSITORY" --body "Merged with rebase: Code Review $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/pull/$N#pullrequestreview-$REVIEW found nothing on ${HEAD:0:7}, and every thread was resolved.
 
