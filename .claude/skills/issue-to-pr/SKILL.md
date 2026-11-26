@@ -120,7 +120,7 @@ then attach the demo and add to the body (`gh pr edit <pr> --body-file body.md`)
 ```
 
 ## 6. Pull request
-Commit with a message that says what changed and why, then:
+Commit with a message that says what changed and why, your note in the same commit (section 8), then:
 ```sh
 git push -u origin HEAD
 gh pr create --base main --title "<what changed>" --body-file body.md
@@ -138,6 +138,12 @@ The body:
 - Watch CI: `gh pr checks <n> --watch`. Red: fix it on the branch and push; never skip or weaken a test to pass.
 - Address review comments with a commit and a reply on each thread; see the `code-review` skill for what reviewers check.
 - Never merge, never push to `main`, never force-push a branch with review comments on it.
+
+## 8. Memory
+Last, what this task learned, as [update-memory](../update-memory/SKILL.md) says: in the same commit as the change,
+written before you commit in section 6; learned later, in the commit of the fix (section 7). Learned once nothing is left
+to commit: a commit of its own on the branch, `Memory: <the note's title>`. Nothing learned: no note.
+Search the notes when needed, as [AGENTS.md](../../../AGENTS.md#memory) says: hints, never orders.
 
 ## Filing an issue
 Every skill that files an issue follows this section, word for word: the issue gets the **Delegate to AI** label
