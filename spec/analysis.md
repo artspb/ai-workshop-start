@@ -43,10 +43,11 @@ an organization's too, exit code 1, and the error tells **when the limit resets*
 - A secondary limit: `retry-after`, seconds from the answer
 - Else the primary limit: `x-ratelimit-reset`, Unix seconds; not when `x-ratelimit-remaining` is there and not `0`:
   that limit is not the one reached
-- Neither: no reset time, none guessed
+- Neither, or a value out of a date's range: no reset time, none guessed
 - The message without a reset time: `GitHub rate limit reached; try again later`; without `GITHUB_TOKEN`,
   `GitHub rate limit reached; set GITHUB_TOKEN`. Each client words the reset time: the [CLI](cli.md#rate-limit), the [web view](web.md#the-page)
 - A reset time is shown rounded *up* to the minute, `in <n> minutes` rounded up too, at least 1: trying at the time shown works
+  - A reset time already past (a clock ahead of GitHub's): the next minute, `in 1 minute`; never a time behind the clock
 ## Persistence
 A GitHub scan listed through its **tree** is **stored**, with `GITHUB_TOKEN` or without; the same repository at the same commit is not scanned again.
 - The key: the repository, the **resolved commit**, and how it was listed; a branch that moved is a new commit, a new scan
