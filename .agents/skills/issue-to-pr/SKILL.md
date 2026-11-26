@@ -49,7 +49,57 @@ npm run typecheck && npm test && npm run e2e && ./skill-atlas scan ./fixture
   must follow from the issue; only then rewrite them with `UPDATE=1 npm run e2e`, and say why in the pull request.
 - A skill copy in `.agents/skills` and `.claude/skills` stays byte-identical.
 
-## 5. Pull request
+## 5. Demo, when a person would see the change
+- **The web view changed** (`src/web/`): record a short video of it, below.
+- **The CLI's output changed**: no video; put the command and its output, before and after, in the body as text.
+- **Nothing a person sees** (spec, tests, refactoring, skills): no demo; say "No demo: <why>" in the body.
+
+Record with Playwright and ffmpeg in a temporary folder, never as dependencies of the repository:
+```sh
+D=$(mktemp -d) && (cd "$D" && npm init -y >/dev/null && npm i -s playwright@1.49.1 ffmpeg-static@5.2.0 \
+  && npx playwright install --with-deps chromium)
+SKILL_ATLAS_CACHE="$D/cache" ./skill-atlas serve --port 0 > "$D/serve.log" &   # prints its URL; no GITHUB_TOKEN
+```
+`$D/record.mjs`, adapted to the change: show the new behaviour in 10–30 s, on `./fixture` (`/?repo=<its absolute path>`)
+or a recorded answer; live GitHub only when the change is about GitHub. Wait for what the page shows, not for time:
+```js
+import { chromium } from 'playwright';
+const browser = await chromium.launch();
+const context = await browser.newContext({ viewport: { width: 1280, height: 800 },
+  recordVideo: { dir: process.argv[3], size: { width: 1280, height: 800 } } });
+const page = await context.newPage();
+await page.goto(process.argv[2]);              // the server's URL, with ?repo=…
+// … the steps that show the change, e.g. await page.getByRole('textbox').fill('commit')
+await page.waitForTimeout(1500);               // let the last frame be seen
+await context.close(); await browser.close();  // the video is written on close
+```
+```sh
+(cd "$D" && node record.mjs "<url>" video) && F=$(node -p "require('$D/node_modules/ffmpeg-static')")
+"$F" -i "$D"/video/*.webm -c:v libx264 -pix_fmt yuv420p -movflags +faststart "$D/demo.mp4"
+"$F" -i "$D/demo.mp4" -vf "fps=10,scale=960:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse" "$D/demo.gif"
+```
+Watch the GIF before you attach it: it shows the change, and nothing private (no token, no path outside the checkout).
+Keep it under 10 MB: shorter, fewer frames or narrower if not.
+
+**Attach** it on the `demos` branch, never on the pull request's branch: a video merged into `main` stays in its history.
+GitHub has no API for the upload a person drags into a comment; a GIF linked from the repository shows inline.
+```sh
+git fetch origin demos && git worktree add "$D/demos" origin/demos \
+  || { git worktree add --detach "$D/demos" && git -C "$D/demos" checkout --orphan demos && git -C "$D/demos" rm -rfq .; }
+mkdir -p "$D/demos/pr-<n>" && cp "$D/demo.gif" "$D/demo.mp4" "$D/demos/pr-<n>/"
+git -C "$D/demos" add -A && git -C "$D/demos" commit -m "Demo of #<n>" && git -C "$D/demos" push origin HEAD:demos
+git worktree remove --force "$D/demos"; kill %1
+```
+The pull request's number exists only once it is opened: open it (section 6), then attach the demo and add to the body
+(`gh pr edit <n> --body-file body.md`):
+```md
+## Demo
+![<what it shows>](https://github.com/{owner}/{repo}/raw/demos/pr-<n>/demo.gif)
+
+[The video, full size](https://github.com/{owner}/{repo}/raw/demos/pr-<n>/demo.mp4)
+```
+
+## 6. Pull request
 Commit with a message that says what changed and why, then:
 ```sh
 git push -u origin HEAD
@@ -60,9 +110,10 @@ The body:
 - **What changed**: for the user, in two or three lines.
 - **Decisions**: what you wrote into the spec, and why, where the issue left a choice.
 - **Tests**: the cases added; e2e output changes and why.
+- **Demo**: the GIF and the video (section 5), the CLI's output as text, or "No demo: <why>".
 - **Open questions**: what a reviewer should decide.
 
-## 6. Green, then reviewed
+## 7. Green, then reviewed
 - Watch CI: `gh pr checks <n> --watch`. Red: fix it on the branch and push; never skip or weaken a test to pass.
 - Address review comments with a commit and a reply on each thread; see the `code-review` skill for what reviewers check.
 - Never merge, never push to `main`, never force-push a branch with review comments on it.
