@@ -47,7 +47,7 @@ Then follow the steps in a browser. Done: stop the server, remove the store.
 - `# <Title>`; **Covers**: what it covers, with a link to the [spec](../spec/); `## Setup`: the server, the data; `## Steps`
 - Steps numbered, one action each, then `- See:` what a tester should see. For a person: the box, a button by its label,
   a link by its text, the address, *back*; no code, no selectors
-- Exact text in quotes; what changes from run to run (a time, a default branch's commit, a count GitHub keeps) said in words
+- Exact text in quotes; what changes from run to run (a time, a default branch's commit, a count or a quota's limit GitHub keeps) said in words
 - Data from the list above. Something new from GitHub: a small repository at a fixed commit, an owner far inside the rate limit
 - Then follow it once with the skill: each step passes, and fails when the page does not do what it says
 
