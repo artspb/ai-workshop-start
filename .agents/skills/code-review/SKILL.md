@@ -25,6 +25,8 @@ gh pr checks <n>
 gh api repos/{owner}/{repo}/pulls/<n>/reviews     # earlier reviews
 gh api repos/{owner}/{repo}/pulls/<n>/comments    # earlier inline comments
 ```
+- **Nothing new, nothing posted**: this skill also runs on every submitted review, replies included.
+  No commit since your last review, and no new comment that asks you something: post nothing.
 - **CI is a fact, not a finding to repeat**: if a check fails, link the failing job in the summary; don't rerun what CI runs.
 - **A re-review**, after a new push: review what changed since your last review
   (`git fetch --depth 1 origin <last reviewed commit>`, then `git diff <last reviewed commit>..<head>`:
