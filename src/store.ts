@@ -49,6 +49,26 @@ export function openStore(directory: string, now: () => Date = () => new Date())
     }
   }
 
+  /**
+   * Changes to one stored scan, one at a time: each reads the entry the last one wrote, so scans
+   * at the same time in one process lose no ref. Separate processes can still race.
+   */
+  const queues = new Map<string, Promise<unknown>>();
+  function serially<T>(scanId: string, change: () => Promise<T>): Promise<T> {
+    const next = (queues.get(scanId) ?? Promise.resolve()).then(change);
+    const settled = next.catch(() => {});
+    queues.set(scanId, settled);
+    void settled.then(() => queues.get(scanId) === settled && queues.delete(scanId));
+    return next;
+  }
+
+  /** Adds the ref to the key's entry; whether the entry is stored. */
+  async function addTo(entry: Entry, ref: string): Promise<boolean> {
+    // Not recorded if it cannot be written: the scan is still stored.
+    if (!entry.refs.includes(ref)) await write({ ...entry, refs: [...entry.refs, ref] });
+    return true;
+  }
+
   /** The key's entry; another key under the same id is not it. */
   async function entryOf(key: string): Promise<Entry | undefined> {
     const entry = await read(id(key));
@@ -61,14 +81,18 @@ export function openStore(directory: string, now: () => Date = () => new Date())
       return (await entryOf(key))?.result;
     },
     set(key, { ref, result }) {
-      return write({ version: VERSION, key, refs: [ref], scannedAt: now().toISOString(), result });
+      return serially(id(key), async () => {
+        // Another scan of the commit, at the same time, stored it first: its result, and this ref too.
+        const stored = await entryOf(key);
+        if (stored) return addTo(stored, ref);
+        return write({ version: VERSION, key, refs: [ref], scannedAt: now().toISOString(), result });
+      });
     },
-    async addRef(key, ref) {
-      const entry = await entryOf(key);
-      if (!entry) return false;
-      // Not recorded if it cannot be written: the scan is still stored.
-      if (!entry.refs.includes(ref)) await write({ ...entry, refs: [...entry.refs, ref] });
-      return true;
+    addRef(key, ref) {
+      return serially(id(key), async () => {
+        const stored = await entryOf(key);
+        return stored ? addTo(stored, ref) : false;
+      });
     },
     async list() {
       const names = await readdir(directory).catch(() => [] as string[]);

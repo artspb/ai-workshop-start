@@ -32,6 +32,7 @@ function github(head: string): Recording {
     'https://api.github.com/repos/JetBrains/example/commits/main': { status: 200, body: { sha: head } },
     [`https://api.github.com/repos/JetBrains/example/commits/${MAIN}`]: { status: 200, body: { sha: MAIN } },
     'https://api.github.com/repos/JetBrains/example/commits/v1.0': { status: 200, body: { sha: MAIN } },
+    'https://api.github.com/repos/JetBrains/example/commits/v2.0': { status: 200, body: { sha: MAIN } },
     'https://api.github.com/search/code?q=filename:SKILL.md+repo:JetBrains/example&per_page=100&page=1': {
       status: 200,
       body: { total_count: 1, items: [{ path: SKILL }] },
@@ -141,6 +142,22 @@ test('two refs at one commit: one stored scan, scanned once, and both refs recor
   assert.equal(again.stored, first.stored);
   const scans = await store.list();
   assert.deepEqual(scans.map((stored) => [stored.id, stored.refs]), [[first.stored, [MAIN, 'v1.0']]]);
+});
+
+test('refs at one commit scanned at the same time: none is lost, stored or not yet', async (t) => {
+  const open = (ref: string) => openGitHub(`github.com/JetBrains/example/tree/${ref}`, { fetch: replay(github(MAIN)) });
+  // Stored already: both refs are added to it.
+  const stored = openStore(storeDirectory(t));
+  await scan(await open(MAIN), stored);
+  const [v1, v2] = await Promise.all([open('v1.0'), open('v2.0')]);
+  const hits = await Promise.all([scan(v1, stored), scan(v2, stored)]);
+  assert.deepEqual((await stored.list()).map((scan) => scan.refs), [[MAIN, 'v1.0', 'v2.0']]);
+  // Not stored yet: both scan, and the second to finish adds its ref to the first's.
+  const empty = openStore(storeDirectory(t));
+  const misses = await Promise.all([scan(await open('v1.0'), empty), scan(await open('v2.0'), empty)]);
+  assert.deepEqual((await empty.list()).map((scan) => [...scan.refs].sort()), [['v1.0', 'v2.0']]);
+  // Every answer names the one stored scan.
+  for (const answer of [...hits, ...misses]) assert.equal(answer.stored, misses[0].stored);
 });
 
 test('warnings are stored with the result', async (t) => {
