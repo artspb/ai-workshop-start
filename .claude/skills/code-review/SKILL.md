@@ -186,7 +186,9 @@ gh api repos/{owner}/{repo}/pulls/<n>/reviews --method POST --input review.json
     - **empty, or with address-review's marker**: address-review's round. Nothing starts address-review again (it runs
       on a submitted review), so say so in a pull request comment, which is not a review: `gh pr comment <n> --body
       'No review of <headRefOid>: a pending address-review round of this bot blocks it; submit any review to start
-      address-review, which submits it, then ask for a review again.'`
+      address-review, which submits it, then ask for a review again.'` It hands the pull request over
+      ([Handing over to a person](#handing-over-to-a-person)): after that line, `@<login>: submit a review to unblock
+      the bot? Then address-review submits its round and Code Review can review <headRefOid>, or leave it unreviewed.`
 
     A pending review is shown only to its author, so a person can't submit or delete it.
 - `line` is the line in the new file; a range adds `start_line`.
