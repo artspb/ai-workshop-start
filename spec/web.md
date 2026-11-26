@@ -24,6 +24,8 @@ The core runs in the server; the page is a *thin client*: HTML, CSS and plain Ja
 - **Scanned before**: every [stored scan](analysis.md#persistence), the latest first: the repository, the commit,
   every ref asked for (`main (default branch)`, a `/tree/<ref>`), the skill count, the warning count and when;
   only the stored scan on the page is marked, by its id
+  - Under the box, before the result and the status; it collapses on its title: open at first,
+    then as the user leaves it, across scans
   - One opens *as stored*, without GitHub: `/?scan=<id>`; the box then holds `<repository URL>/tree/<commit>`
   - Updated after each scan; hidden while nothing is stored
 ## API
