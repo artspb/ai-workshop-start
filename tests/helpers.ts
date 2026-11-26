@@ -16,9 +16,9 @@ export const EXAMPLE_COMMIT = '5ab6270ab772d113e8ad52ebfcaa0109c522ae00';
 const EXAMPLE: Recording = {
   'https://api.github.com/repos/JetBrains/example': { status: 200, body: { full_name: 'JetBrains/example', default_branch: 'main' } },
   'https://api.github.com/repos/JetBrains/example/commits/main': { status: 200, body: { sha: EXAMPLE_COMMIT } },
-  'https://api.github.com/search/code?q=filename:SKILL.md+repo:JetBrains/example&per_page=100&page=1': {
+  [`https://api.github.com/repos/JetBrains/example/git/trees/${EXAMPLE_COMMIT}?recursive=1`]: {
     status: 200,
-    body: { total_count: 1, items: [{ path: '.claude/skills/commits/SKILL.md' }] },
+    body: { truncated: false, tree: [{ path: '.claude/skills/commits/SKILL.md', mode: '100644', type: 'blob', sha: '0' }] },
   },
   [`https://raw.githubusercontent.com/JetBrains/example/${EXAMPLE_COMMIT}/.claude/skills/commits/SKILL.md`]: {
     status: 200,
@@ -28,7 +28,7 @@ const EXAMPLE: Recording = {
 
 const github = replay(EXAMPLE);
 
-/** Opens a scan as the CLI does, with a token, through code search, as EXAMPLE answers it. */
+/** Opens a scan as the CLI does, with a token, as EXAMPLE answers it: its tree fits in one answer. */
 export const open = (input: string) =>
   parseGitHubUrl(input) ? openGitHub(input, { fetch: github, token: 'test' }) : openDirectory(input);
 

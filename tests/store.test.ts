@@ -18,13 +18,16 @@ const MAIN = '1111111111111111111111111111111111111111';
 const NEXT = '2222222222222222222222222222222222222222';
 const SKILL = '.claude/skills/commits/SKILL.md';
 
-/** JetBrains/example with main at `head`; the skill's description says which commit it is. */
-function github(head: string): Recording {
+/**
+ * JetBrains/example with main at `head`; the skill's description says which commit it is.
+ * `large`: each tree is too large for one answer, so a token lists through code search.
+ */
+function github(head: string, { large = false } = {}): Recording {
   const raw = (commit: string, body: string) => ({ [`https://raw.githubusercontent.com/JetBrains/example/${commit}/${SKILL}`]: { status: 200, body } });
   const tree = (commit: string) => ({
     [`https://api.github.com/repos/JetBrains/example/git/trees/${commit}?recursive=1`]: {
       status: 200,
-      body: { truncated: false, tree: [{ path: SKILL, mode: '100644', type: 'blob', sha: '0' }] },
+      body: large ? { truncated: true, tree: [] } : { truncated: false, tree: [{ path: SKILL, mode: '100644', type: 'blob', sha: '0' }] },
     },
   });
   return {
@@ -55,9 +58,9 @@ function storeDirectory(t: TestContext): string {
  * `skill-atlas <args>` as a new run of the CLI: a new store over the directory, GitHub answering
  * from the recording; what it printed, and every URL it asked GitHub for.
  */
-async function atlas(args: string[], options: { directory: string; head?: string; token?: string }) {
+async function atlas(args: string[], options: { directory: string; head?: string; token?: string; large?: boolean }) {
   const requests: string[] = [];
-  const recorded = replay(github(options.head ?? MAIN));
+  const recorded = replay(github(options.head ?? MAIN, { large: options.large }));
   const fetch = (url: string) => (requests.push(url), recorded(url));
   const stdout: string[] = [];
   const stderr: string[] = [];
@@ -96,10 +99,26 @@ test('the branch moved to another commit: scanned again', async (t) => {
   assert.equal(readdirSync(directory).length, 2);
 });
 
-test('code search is never stored: its index follows the default branch late, so it is scanned every time', async (t) => {
+test('with a token, a default branch that fits in one tree: listed through the tree, not code search, and stored', async (t) => {
+  const directory = storeDirectory(t);
+  const first = await atlas(['scan', 'github.com/JetBrains/example'], { directory, token: 'test' });
+  assert.equal(first.code, 0, first.stderr);
+  assert.ok(first.requests.some((url) => url.includes(`/trees/${MAIN}`)));
+  assert.ok(!first.requests.some((url) => url.includes('/search/code')));
+  const again = await atlas(['scan', 'github.com/JetBrains/example'], { directory, token: 'test' });
+  assert.deepEqual(again.requests, RESOLVE);
+  assert.equal(again.stdout, first.stdout);
+  // Stored apart from a scan without a token: a tree too large lists differently with one.
+  assert.ok((await atlas(['scan', 'github.com/JetBrains/example'], { directory })).requests.length > RESOLVE.length);
+  assert.equal(readdirSync(directory).length, 2);
+});
+
+test('with a token, a default branch too large for one tree: code search, never stored, scanned every time', async (t) => {
   const directory = storeDirectory(t);
   for (let i = 0; i < 2; i++) {
-    const searched = await atlas(['scan', 'github.com/JetBrains/example'], { directory, token: 'test' });
+    const searched = await atlas(['scan', 'github.com/JetBrains/example'], { directory, token: 'test', large: true });
+    assert.match(searched.stdout, /As of the first commit\./);
+    assert.equal(searched.stderr, '');
     assert.equal(searched.code, 0, searched.stderr);
     assert.ok(searched.requests.some((url) => url.includes('/search/code')));
   }
@@ -109,11 +128,11 @@ test('code search is never stored: its index follows the default branch late, so
 test('an index that caught up: the next code search finds the skill the last one missed', async (t) => {
   const store = openStore(storeDirectory(t));
   const search = 'https://api.github.com/search/code?q=filename:SKILL.md+repo:JetBrains/example&per_page=100&page=1';
-  const lagging = github(MAIN);
+  const lagging = github(MAIN, { large: true });
   lagging[search] = { status: 200, body: { total_count: 0, items: [] } };
   const open = (recording: Recording) => openGitHub('github.com/JetBrains/example', { fetch: replay(recording), token: 'test' });
   assert.equal((await scan(await open(lagging), store)).result.skills.length, 0);
-  assert.equal((await scan(await open(github(MAIN)), store)).result.skills.length, 1);
+  assert.equal((await scan(await open(github(MAIN, { large: true })), store)).result.skills.length, 1);
 });
 
 test('the key is the commit and whether it was the default branch: the default branch and /tree/<ref> are stored apart', async (t) => {
@@ -272,9 +291,9 @@ test('every stored scan, the latest first: repository, commit, what was asked fo
   let clock = Date.parse('2026-11-26T10:00:00Z');
   const store = openStore(directory, () => new Date(clock));
   assert.deepEqual(await store.list(), []);
-  const open = (input: string, head: string, token?: string) => openGitHub(input, { fetch: replay(github(head)), token });
+  const open = (input: string, head: string, token?: string) => openGitHub(input, { fetch: replay(github(head, { large: Boolean(token) })), token });
   await scan(await open(`github.com/JetBrains/example/tree/${MAIN}`, MAIN), store);
-  await scan(await open('github.com/JetBrains/example', MAIN, 'test'), store); // code search: not stored
+  await scan(await open('github.com/JetBrains/example', MAIN, 'test'), store); // a tree too large: code search, not stored
   clock += 60_000;
   await scan(await open('github.com/JetBrains/example', NEXT), store);
   clock += 60_000;
@@ -360,7 +379,7 @@ test('/api/scans: the stored scans; /api/scans/<id>: one, as /api/scan answers i
 test('/api/scan, not stored: stored is null; /api/scans without a store: none', async (t) => {
   const directory = storeDirectory(t);
   const stored = createWebServer({
-    open: (input) => (parseGitHubUrl(input) ? openGitHub(input, { fetch: replay(github(MAIN)), token: 'test' }) : openDirectory(input)),
+    open: (input) => (parseGitHubUrl(input) ? openGitHub(input, { fetch: replay(github(MAIN, { large: true })), token: 'test' }) : openDirectory(input)),
     store: openStore(directory),
   });
   const storedBase = await listen(stored, 0);

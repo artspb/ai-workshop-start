@@ -21,10 +21,11 @@ a regular file named exactly `SKILL.md` at **`<root>/<name>/SKILL.md`**.
   Its path is the first by path; the others are its copies, and share its warnings.
   The same `<name>` with different bytes: *two skills*.
 ## Persistence
-A GitHub scan listed through its **tree** is **stored**; the same repository at the same commit is not scanned again.
-- The key: the repository, the **resolved commit**, and whether it was the default branch (its warning is worded for that); a branch that moved is a new commit, a new scan
-- A **code search** scan (`GITHUB_TOKEN`, the default branch) is never stored: the index follows the default branch late,
-  and may not have every skill of the commit yet; the next scan may find more
+A GitHub scan listed through its **tree** is **stored**, with `GITHUB_TOKEN` or without; the same repository at the same commit is not scanned again.
+- The key: the repository, the **resolved commit**, and what a tree too large for one answer would list: for a `/tree/<ref>`, the roots;
+  for the default branch, the roots with a warning worded for it, or code search with `GITHUB_TOKEN`. A branch that moved is a new commit, a new scan
+- A **code search** scan is never stored: the index follows the default branch late, and may not have every skill of the commit yet;
+  the next scan may find more
 - Each stored scan records **every ref asked for**, in order: `<branch> (default branch)`, the `<ref>` of `/tree/<ref>`;
   two refs at the same commit share one stored scan, scanned once; refs scanned at the same time in one process are all kept
   (two processes at the same time may keep only one)
@@ -39,7 +40,8 @@ Core: fetch → find → parse, then the store. CLI: a *thin client*.
 Skill: id = `repo:path`, name, description, commit, copies
 ## Details
 - **GitHub API**, no clone; *under 5 s* for intellij-community
-- A tree too large for one answer: only the roots at the repository root, and a *warning*; with `GITHUB_TOKEN`, code search finds every root
+- Every scan asks for the **tree** first. A tree too large for one answer: only the roots at the repository root, and a *warning*;
+  with `GITHUB_TOKEN`, on the default branch, code search finds every root, after the tree's answer
 - Code search sees only the default branch: a `/tree/<ref>` scan always lists the tree
 - The name: front matter, else the directory
 - The link pins the *scanned commit*; for a local directory, the file itself
