@@ -34,6 +34,14 @@ The core runs in the server; the page is a *thin client*: HTML, CSS and plain Ja
     then as the user leaves it, across scans
   - One opens *as stored*, without GitHub: `/?scan=<id>`; the box then holds `<repository URL>/tree/<commit>`
   - Updated after each scan; hidden while nothing is stored
+- **Search** every stored scan, in **Scanned before**, above its list: the CLI does not
+  - Matches as the filter does: every word, case-insensitive, in a skill's name or description; no word, no search: the list shows
+  - Each repository once, from its latest stored scan, at whichever commit or ref; a skill only in an older scan is not found
+  - While it has a word, the results in place of the list: each skill's **name**, first sentence (as `scan` prints it),
+    its repository, the commit and every ref asked for, and its pinned **link**; sorted by name, then repository, then path
+  - A result's repository opens its scan *as stored*, as a row of **Scanned before** does: `/?scan=<id>`
+  - None: `No skill in a stored scan matches.`; searched again after each scan, as the list is updated
+  - From the store only, without GitHub: offline too, no rate limit spent
 ## API
 `GET /api/scan?repo=<URL | directory>` → `200` with JSON:
 `{ repository, skills: [{ id, name, description, path, commit, copies, link }], warnings, stored }`
@@ -57,3 +65,8 @@ An organization, `?repo=github.com/<owner>` → `200` with JSON:
 `skills` and `warnings` are counts, `scannedAt` an ISO 8601 time
 
 `GET /api/scans/<id>` → `200`, the stored result, as `/api/scan` answers it, `stored` being `<id>`; no such scan: `404`, `{ error }`
+
+`GET /api/search?q=<words>` → `200`, `{ results: [{ id, name, sentence, link, repository, refs, scan }] }`, from the store only:
+the skills of each repository's latest stored scan that match, sorted as the page shows them
+- `sentence`: the description's first sentence, `''` without one; `refs`: the stored scan's; `scan`: its id, for `/api/scans/<id>`
+- No word in `q`, or no store: `{ results: [] }`

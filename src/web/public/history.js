@@ -69,3 +69,28 @@ export function historyView(scans, shown, time = (iso) => new Date(iso).toLocale
     })),
   };
 }
+
+/**
+ * The search across stored scans, for a query and /api/search's results: no word, no search, the
+ * list shows; else a row per result, in the server's order, its repository opening its scan as stored.
+ * @param {string} query
+ * @param {{ name: string, sentence: string, link: string, repository: { id: string, commit: string }, refs: string[], scan: string }[]} results
+ */
+export function searchView(query, results) {
+  if (!query.trim()) return { searching: false, empty: false, rows: [] };
+  return {
+    searching: true,
+    empty: results.length === 0,
+    rows: results.map((result) => ({
+      name: result.name,
+      sentence: result.sentence,
+      link: result.link,
+      repository: result.repository.id,
+      href: `/?scan=${result.scan}`,
+      scan: result.scan,
+      commit: result.repository.commit,
+      short: result.repository.commit.slice(0, 12),
+      refs: result.refs.join(', '),
+    })),
+  };
+}

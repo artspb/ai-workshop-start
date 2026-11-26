@@ -1,0 +1,195 @@
+// The search across stored scans in spec/web.md, checked on the real server over a store in a
+// temporary directory, with GitHub never asked: the search answers from the store only.
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { test, type TestContext } from 'node:test';
+import type { ScanResult } from '../src/core/scan.ts';
+import { openStore } from '../src/store.ts';
+import { createWebServer, listen } from '../src/web/server.ts';
+import { searchView } from '../src/web/public/history.js';
+
+const OLD = '1111111111111111111111111111111111111111';
+const NEW = '2222222222222222222222222222222222222222';
+const KOTLIN = '3333333333333333333333333333333333333333';
+
+/** A stored result of `owner/name` at `commit`, with the skills given as [name, description, path?]. */
+function result(id: string, commit: string, skills: [string, string, string?][]): ScanResult {
+  const [organization, name] = id.split('/');
+  return {
+    repository: { id, organization, name, url: `https://github.com/${id}`, commit },
+    skills: skills.map(([skill, description, path = `.claude/skills/${skill}/SKILL.md`]) => ({
+      id: `${id}:${path}`,
+      repository: id,
+      path,
+      name: skill,
+      description,
+      commit,
+      copies: [],
+    })),
+    warnings: [],
+  };
+}
+
+/**
+ * A store holding, oldest first: JetBrains/example at OLD, JetBrains/kotlin, then JetBrains/example
+ * at NEW; and a server over it whose GitHub fails every request, counted.
+ */
+async function serve(t: TestContext) {
+  const directory = mkdtempSync(join(tmpdir(), 'skill-atlas-search-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  let clock = Date.parse('2026-11-26T10:00:00Z');
+  const store = openStore(directory, () => new Date(clock));
+  await store.set(`example@${OLD}`, {
+    ref: 'main (default branch)',
+    result: result('JetBrains/example', OLD, [
+      ['commits', 'Write commit messages the way this repository does. Use for every commit.'],
+      ['old-only', 'A skill removed since. Gone at the next commit.'],
+    ]),
+  });
+  clock += 60_000;
+  await store.set(`kotlin@${KOTLIN}`, {
+    ref: 'master (default branch)',
+    result: result('JetBrains/kotlin', KOTLIN, [
+      ['bump', 'Bump the Kotlin version! Then run the tests.'],
+      ['commits', 'Commit messages, Kotlin style.'],
+      ['empty', ''],
+    ]),
+  });
+  clock += 60_000;
+  await store.set(`example@${NEW}`, {
+    ref: 'main (default branch)',
+    result: result('JetBrains/example', NEW, [
+      ['commits', 'Write commit messages the way this repository does now. Use for every commit.'],
+      ['review', 'Review a Pull Request.\nCheck the tests.'],
+    ]),
+  });
+  await store.addRef(`example@${NEW}`, 'v2.0');
+  const scans = await store.list();
+  const requests: string[] = [];
+  const server = createWebServer({ open: (input) => (requests.push(input), Promise.reject(new Error('offline'))), store });
+  const base = await listen(server, 0);
+  t.after(() => server.close());
+  const search = async (q: string | undefined) => {
+    const response = await fetch(`${base}/api/search${q === undefined ? '' : `?q=${encodeURIComponent(q)}`}`);
+    return { status: response.status, type: response.headers.get('content-type'), body: (await response.json()) as any };
+  };
+  const ids = (repository: string, commit: string) => scans.find((scan) => scan.repository.id === repository && scan.repository.commit === commit)!.id;
+  return { search, requests, base, scan: { example: ids('JetBrains/example', NEW), old: ids('JetBrains/example', OLD), kotlin: ids('JetBrains/kotlin', KOTLIN) } };
+}
+
+const found = (body: { results: { name: string; repository: { id: string } }[] }) => body.results.map((r) => `${r.repository.id} ${r.name}`);
+
+test('/api/search: each result its name, first sentence, repository, commit and refs, pinned link and stored scan', async (t) => {
+  const { search, scan } = await serve(t);
+  const { status, type, body } = await search('review');
+  assert.equal(status, 200);
+  assert.equal(type, 'application/json; charset=utf-8');
+  assert.deepEqual(body, {
+    results: [
+      {
+        id: 'JetBrains/example:.claude/skills/review/SKILL.md',
+        name: 'review',
+        sentence: 'Review a Pull Request.',
+        link: `https://github.com/JetBrains/example/blob/${NEW}/.claude/skills/review/SKILL.md`,
+        repository: { id: 'JetBrains/example', organization: 'JetBrains', name: 'example', url: 'https://github.com/JetBrains/example', commit: NEW },
+        refs: ['main (default branch)', 'v2.0'],
+        scan: scan.example,
+      },
+    ],
+  });
+  // The first sentence as scan prints it: up to its . ! or ?; none, empty.
+  assert.deepEqual((await search('bump')).body.results.map((r: { sentence: string }) => r.sentence), ['Bump the Kotlin version!']);
+  assert.deepEqual((await search('empty')).body.results.map((r: { sentence: string }) => r.sentence), ['']);
+});
+
+test('/api/search: matches as the filter does, every word, case-insensitive, in the name or the description', async (t) => {
+  const { search } = await serve(t);
+  assert.deepEqual(found((await search('COMMIT')).body), ['JetBrains/example commits', 'JetBrains/kotlin commits']);
+  assert.deepEqual(found((await search('commit kotlin')).body), ['JetBrains/kotlin commits']);
+  assert.deepEqual(found((await search('  version   KOTLIN ')).body), ['JetBrains/kotlin bump']);
+  assert.deepEqual(found((await search('check tests')).body), ['JetBrains/example review']);
+  assert.deepEqual(found((await search('commit gradle')).body), []);
+});
+
+test('/api/search: sorted by name, then repository, then path', async (t) => {
+  const { search } = await serve(t);
+  // Every skill of the latest scans has an "e": the order of them all.
+  assert.deepEqual(found((await search('e')).body), [
+    'JetBrains/kotlin bump',
+    'JetBrains/example commits',
+    'JetBrains/kotlin commits',
+    'JetBrains/kotlin empty',
+    'JetBrains/example review',
+  ]);
+});
+
+test('/api/search: a repository scanned at several commits shows its skills once, from its latest stored scan', async (t) => {
+  const { search, scan } = await serve(t);
+  const { results } = (await search('commits')).body;
+  const example = results.filter((r: { repository: { id: string } }) => r.repository.id === 'JetBrains/example');
+  assert.equal(example.length, 1);
+  assert.equal(example[0].repository.commit, NEW);
+  assert.equal(example[0].scan, scan.example);
+  assert.equal(example[0].sentence, 'Write commit messages the way this repository does now.');
+  // A skill only in an older scan is not found.
+  assert.deepEqual((await search('old-only')).body, { results: [] });
+  assert.deepEqual((await search('removed')).body, { results: [] });
+});
+
+test('/api/search: from the store only, GitHub never asked; a result opens its scan as stored', async (t) => {
+  const { search, requests, base, scan } = await serve(t);
+  const { results } = (await search('commit')).body;
+  assert.deepEqual(requests, []);
+  const kotlin = results.find((r: { repository: { id: string } }) => r.repository.id === 'JetBrains/kotlin');
+  assert.equal(kotlin.scan, scan.kotlin);
+  const opened = (await (await fetch(`${base}/api/scans/${kotlin.scan}`)).json()) as { repository: { commit: string }; stored: string };
+  assert.equal(opened.repository.commit, KOTLIN);
+  assert.equal(opened.stored, scan.kotlin);
+  assert.deepEqual(requests, []);
+});
+
+test('/api/search: no word, or no store: no results', async (t) => {
+  const { search } = await serve(t);
+  for (const q of [undefined, '', '   ']) assert.deepEqual(await search(q), { status: 200, type: 'application/json; charset=utf-8', body: { results: [] } }, String(q));
+  const server = createWebServer({ open: () => Promise.reject(new Error('offline')) });
+  const base = await listen(server, 0);
+  t.after(() => server.close());
+  assert.deepEqual(await (await fetch(`${base}/api/search?q=commit`)).json(), { results: [] });
+});
+
+test('the page: a search box in Scanned before, above its list', async (t) => {
+  const { base } = await serve(t);
+  const html = await (await fetch(`${base}/`)).text();
+  const history = html.slice(html.indexOf('<details id="history"'), html.indexOf('</details>'));
+  const box = history.indexOf('<input id="search" type="search"');
+  assert.ok(box > 0, 'the search box is in Scanned before');
+  assert.ok(box < history.indexOf('<ul id="scans">'), 'above its list');
+  assert.ok(history.includes('<ul id="found" hidden>'), 'the results, hidden at first');
+  assert.ok(history.includes('No skill in a stored scan matches.'));
+});
+
+test('the page, a search: no word, the list; else the results in its place, each opening its scan as stored', async (t) => {
+  const { search, scan } = await serve(t);
+  assert.deepEqual(searchView('  ', []), { searching: false, empty: false, rows: [] });
+  assert.deepEqual(searchView('nothing', []), { searching: true, empty: true, rows: [] });
+  const view = searchView('review', (await search('review')).body.results);
+  assert.deepEqual(view, {
+    searching: true,
+    empty: false,
+    rows: [
+      {
+        name: 'review',
+        sentence: 'Review a Pull Request.',
+        link: `https://github.com/JetBrains/example/blob/${NEW}/.claude/skills/review/SKILL.md`,
+        repository: 'JetBrains/example',
+        href: `/?scan=${scan.example}`,
+        scan: scan.example,
+        commit: NEW,
+        short: NEW.slice(0, 12),
+        refs: 'main (default branch), v2.0',
+      },
+    ],
+  });
+});
