@@ -192,14 +192,18 @@ test('/tree/<ref>: that commit, listed through its tree even with a token; an un
   assert.equal(parseGitHubUrl('github.com/JetBrains/example/tree/main/docs'), undefined);
 });
 
-test("this repository's code-review skill: the .claude/skills file is a copy of the .agents/skills one", async () => {
+test("this repository's skills: each .claude/skills file is a copy of its .agents/skills one", async () => {
   // An edit to one copy and not the other turns one skill into two: the scan would list both.
   const root = fileURLToPath(new URL('..', import.meta.url));
+  const names = readdirSync(join(root, '.agents/skills'));
+  assert.ok(names.includes('code-review') && names.includes('issue-to-pr'), names.join(', '));
   const scanned = await atlas(['scan', root]);
   assert.equal(scanned.code, 0, scanned.stderr);
   const lines = scanned.stdout.split('\n');
-  const reviews = lines.flatMap((line, index) => (line.startsWith('code-review — ') ? [lines.slice(index, index + 3)] : []));
-  assert.equal(reviews.length, 1, scanned.stdout);
-  assert.match(reviews[0][1], /\/\.agents\/skills\/code-review\/SKILL\.md$/);
-  assert.equal(reviews[0][2], '  also in .claude/skills/code-review/SKILL.md');
+  for (const name of names) {
+    const found = lines.flatMap((line, index) => (line.startsWith(`${name} — `) ? [lines.slice(index, index + 3)] : []));
+    assert.equal(found.length, 1, `${name}:\n${scanned.stdout}`);
+    assert.ok(found[0][1].endsWith(`/.agents/skills/${name}/SKILL.md`), found[0][1]);
+    assert.equal(found[0][2], `  also in .claude/skills/${name}/SKILL.md`);
+  }
 });
