@@ -2,7 +2,10 @@
 // baseline committed next to the tests, at the viewport's size, and no baseline is left over; the page is
 // shot the same way on every machine; `npm run e2e` runs them after the CLI's tests.
 import assert from 'node:assert/strict';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import config from '../playwright.config.ts';
@@ -54,4 +57,31 @@ test('npm run e2e runs the visual tests after the CLI\'s; npm run e2e:update acc
   assert.equal(scripts['e2e:update'], 'playwright test --update-snapshots=changed');
   const { devDependencies } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   assert.equal(devDependencies['@playwright/test'], '1.65.1', '1.49.1 hangs on Node 26');
+});
+
+/** `npm run <script> -- --list`, with Node told it runs on `platform`: the config is loaded, no browser starts. */
+function list(script: string, platform: string) {
+  const preload = join(mkdtempSync(join(tmpdir(), 'platform-')), 'platform.cjs');
+  writeFileSync(preload, `Object.defineProperty(process, 'platform', { value: ${JSON.stringify(platform)} });`);
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  const [command, ...args] = script.split(' ');
+  return spawnSync(join(root, 'node_modules/.bin', command), [...args, '--list'], {
+    cwd: root, encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: `--require ${preload}` },
+  });
+}
+
+test('only npm run e2e:update writes a baseline, and only on Linux: on a Mac it refuses, before any browser starts', () => {
+  const { scripts } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  const update = scripts['e2e:update'];
+  const refused = list(update, 'darwin');
+  assert.notEqual(refused.status, 0, 'e2e:update runs on a Mac');
+  assert.match(refused.stderr + refused.stdout, /Accept new screenshots on Linux, as CI runs them, not on darwin: see AGENTS\.md/);
+  for (const flag of ['playwright test -u', 'playwright test --update-snapshots', 'playwright test --update-snapshots=all']) {
+    assert.notEqual(list(flag, 'darwin').status, 0, `${flag} runs on a Mac`);
+  }
+  for (const [script, platform] of [[update, 'linux'], ['playwright test', 'darwin']]) {
+    const { status, stdout, stderr } = list(script, platform);
+    assert.equal(status, 0, `${script} on ${platform}: ${stderr}`);
+    assert.match(stdout, /Total: \d+ tests? in/, `${script} on ${platform} lists the visual tests`);
+  }
 });
