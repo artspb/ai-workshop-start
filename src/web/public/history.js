@@ -16,6 +16,20 @@ export function addressRequest(search) {
 }
 
 /**
+ * The page's scans, one at a time: each call aborts the scan before, so the server stops asking GitHub
+ * for it, and hands out the signal of the next one. Every address asks for one, an empty one too.
+ * @returns {() => AbortSignal}
+ */
+export function scanSignals() {
+  let asking = null;
+  return () => {
+    asking?.abort();
+    asking = new AbortController();
+    return asking.signal;
+  };
+}
+
+/**
  * The box, for a stored scan on the page: its repository at its commit, to scan again.
  * @param {{ url: string, commit: string }} repository
  */

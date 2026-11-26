@@ -1,7 +1,7 @@
 // The page: a thin client of /api/scan and /api/scans. The address holds the scan:
 // /?repo=<URL | directory | organization URL> scans, /?scan=<id> opens a stored scan.
 import { filterRepositories, filterSkills } from './filter.js';
-import { addressRequest, historyView, storedBox, storedOnPage } from './history.js';
+import { addressRequest, historyView, scanSignals, storedBox, storedOnPage } from './history.js';
 
 const $ = (id) => document.getElementById(id);
 const form = $('scan');
@@ -17,8 +17,8 @@ let skills = [];
 let repositories = null;
 /** Only the latest scan is shown, whatever order the answers come in. */
 let latest = 0;
-/** Aborts the scan asked for last: the server then stops asking GitHub for it. */
-let asking = null;
+/** Aborts the scan asked for last, the server then stops asking GitHub for it, and gives the next one's signal. */
+const nextScan = scanSignals();
 /** The stored scan on the page, if any: the one marked in Scanned before. */
 let shown = null;
 
@@ -47,8 +47,7 @@ async function scanAddress() {
   input.value = request?.repo ?? '';
   // Every address cancels the scan before it, an empty one too.
   const scan = ++latest;
-  asking?.abort();
-  asking = new AbortController();
+  const signal = nextScan();
   shown = null;
   if (!request) {
     status.hidden = result.hidden = true;
@@ -58,7 +57,7 @@ async function scanAddress() {
   result.hidden = true;
   let answer;
   try {
-    answer = await (await fetch(request.url, { signal: asking.signal })).json();
+    answer = await (await fetch(request.url, { signal })).json();
   } catch (error) {
     answer = { error: `The Skill Atlas server does not answer: ${error.message}` };
   }

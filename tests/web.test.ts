@@ -9,7 +9,7 @@ import { after, test } from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { createWebServer, listen } from '../src/web/server.ts';
 import { filterRepositories, filterSkills } from '../src/web/public/filter.js';
-import { addressRequest, historyView, storedBox, storedOnPage } from '../src/web/public/history.js';
+import { addressRequest, historyView, scanSignals, storedBox, storedOnPage } from '../src/web/public/history.js';
 import { atlas, CLI, EXAMPLE_COMMIT, FIXTURE, open } from './helpers.ts';
 
 const server = createWebServer({ open });
@@ -236,6 +236,22 @@ test('Scanned before: hidden while nothing is stored; a row per scan, in order; 
   assert.equal(storedOnPage({ organization: { id: 'JetBrains' }, repositories: [{ stored: 'a' }] } as any), null);
   // Not stored, or nothing on the page: none marked.
   for (const shown of [null, undefined, '']) assert.ok(historyView(scans, shown).rows.every((row) => !row.current), String(shown));
+});
+
+test('the page aborts its scan before the next one: another scan, back, an empty address', () => {
+  const nextScan = scanSignals();
+  const first = nextScan();
+  assert.equal(first.aborted, false);
+  const second = nextScan();
+  assert.equal(first.aborted, true);
+  assert.equal(second.aborted, false);
+  // The one asked for last is left alone until the next.
+  const third = nextScan();
+  assert.equal(second.aborted, true);
+  assert.equal(third.aborted, false);
+  // Each page has its own: another page's scans do not abort this one's.
+  scanSignals()();
+  assert.equal(third.aborted, false);
 });
 
 test('skill-atlas serve --port: the real CLI prints its URL and serves the page', async () => {
