@@ -195,7 +195,8 @@ test('/tree/<ref>: that commit, listed through its tree even with a token; an un
 test("this repository's skills: each .claude/skills file is a copy of its .agents/skills one", async () => {
   // An edit to one copy and not the other turns one skill into two: the scan would list both.
   const root = fileURLToPath(new URL('..', import.meta.url));
-  const names = readdirSync(join(root, '.agents/skills'));
+  // From both sides: a skill on one side only fails the path check or the `also in` check below.
+  const names = [...new Set([...readdirSync(join(root, '.agents/skills')), ...readdirSync(join(root, '.claude/skills'))])];
   assert.ok(names.includes('code-review') && names.includes('issue-to-pr'), names.join(', '));
   const scanned = await atlas(['scan', root]);
   assert.equal(scanned.code, 0, scanned.stderr);
