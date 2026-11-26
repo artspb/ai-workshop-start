@@ -98,7 +98,8 @@ before its submit leaves one. **A review of yours in state `PENDING` (`viewerDid
 your marker line is `R`**; add one only without it. One whose body is text without your marker is Code Review's,
 in flight (it is created with its summary as the body, code-review section 6): never reply in it nor submit it, or its
 findings would read as your round. Wait a minute and read again, up to three times; still there, post nothing and stop
-(a pending review blocks yours, and Code Review's run deletes it when it fails).
+(a pending review blocks yours; Code Review's run deletes it when it fails, and its next run deletes one left by a
+run that died, code-review section 6).
 Every free-text value goes with `-f`: `-F` reads a value starting with `@` as a file and `123` as a number.
 ```sh
 R=<the id of your pending round>      # or, without one:

@@ -119,11 +119,19 @@ gh api repos/{owner}/{repo}/pulls/<n>/reviews --method POST --input review.json
     Don't look the author up first: `gh api user` gives no answer for a GitHub App token (403).
   - `Line could not be resolved`: a comment is on a line outside the diff, and the error does not say which.
     Check each comment's line against `gh pr diff <n>` and move those outside it into the summary, as `path:line`.
-  - `User can only have one pending review per pull request`: an address-review round of the same bot is in flight.
-    Wait a minute and post again, up to three times. Then nothing starts address-review again (it runs on a submitted
-    review), so say so in a pull request comment, which is not a review: `gh pr comment <n> --body 'No review of <headRefOid>:
-    a pending review of this bot blocks it; submit any review to start address-review, which submits it, then ask
-    for a review again.'` A pending review is shown only to its author, so a person can't submit or delete it.
+  - `User can only have one pending review per pull request`: another run of the same bot is in flight.
+    Wait a minute and post again, up to three times. Still refused: read the pending review
+    (`reviews(last: 5, states: PENDING) { nodes { databaseId viewerDidAuthor body } }`); a run takes seconds to submit,
+    so after three minutes it is stranded. Its kind is in its body, read as address-review reads it (section 1):
+    - **text without address-review's marker**: a Code Review run that died before its submit or its delete.
+      Delete it (`gh api repos/{owner}/{repo}/pulls/<n>/reviews/<databaseId> --method DELETE`) and post again:
+      address-review never submits one, so nothing else would.
+    - **empty, or with address-review's marker**: address-review's round. Nothing starts address-review again (it runs
+      on a submitted review), so say so in a pull request comment, which is not a review: `gh pr comment <n> --body
+      'No review of <headRefOid>: a pending address-review round of this bot blocks it; submit any review to start
+      address-review, which submits it, then ask for a review again.'`
+
+    A pending review is shown only to its author, so a person can't submit or delete it.
 - `line` is the line in the new file; a range adds `start_line`.
 - **With replies** to earlier threads (section 4): a reply of its own is a review of its own, and starts
   address-review before your summary is there. So post the same JSON **without** `event`: the review stays
