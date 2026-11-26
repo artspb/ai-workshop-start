@@ -24,7 +24,7 @@ The core runs in the server; the page is a *thin client*: HTML, CSS and plain Ja
 ## API
 `GET /api/scan?repo=<URL | directory>` → `200` with JSON:
 `{ repository, skills: [{ id, name, description, path, commit, copies, link }], warnings, stored }`
-- `stored`: the id of the [stored scan](analysis.md#persistence), as `/api/scans` lists it; `null` when not stored (a local directory, code search, a store that cannot be written)
+- `stored`: the id of the [stored scan](analysis.md#persistence), as `/api/scans` lists it; `null` when not stored (a local directory, a code search not exact for the commit, a store that cannot be written)
 - An error the CLI reports with exit code 1 (no `repo`, unreachable, not found): `400`, `{ error: <message> }`
 - Anything else: `500`, `{ error }`; an unknown path: `404`
 

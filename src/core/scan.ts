@@ -9,7 +9,7 @@ export type Source = {
    * Every file path, relative to the repository root, and what listing them had to leave out.
    * Listed only when the scan runs: a stored result needs no listing. `key`: the one of `keys`
    * the result is stored under; none when the listing does not follow from the commit alone
-   * (code search).
+   * (code search whose index cannot be matched to the commit).
    */
   list(): Promise<{ paths: string[]; warnings: string[]; key?: string }>;
   /** The file's bytes, or undefined if it is not there. */

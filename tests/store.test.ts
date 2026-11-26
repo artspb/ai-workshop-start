@@ -17,6 +17,8 @@ import { FIXTURE } from './helpers.ts';
 const MAIN = '1111111111111111111111111111111111111111';
 const NEXT = '2222222222222222222222222222222222222222';
 const SKILL = '.claude/skills/commits/SKILL.md';
+/** The compare's files per page: a compare with as many is too large to trust. */
+const COMPARE_FILES = 300;
 
 /**
  * JetBrains/example with main at `head`; the skill's description says which commit it is.
@@ -55,6 +57,7 @@ function github(head: string, { large = false } = {}): Recording {
       status: 200,
       body: { total_count: 1, items: [{ path: SKILL }] },
     },
+    [`https://raw.githubusercontent.com/JetBrains/example/${MAIN}/.agents/skills/x/SKILL.md`]: { status: 200, body: '---\nname: x\ndescription: X.\n---\n' },
     ...tree(MAIN),
     ...tree(NEXT),
     ...raw(MAIN, '---\nname: commits\ndescription: As of the first commit.\n---\n'),
@@ -126,7 +129,7 @@ test('with a token, a default branch that fits in one tree: listed through the t
   assert.equal(readdirSync(directory).length, 1);
 });
 
-test('with a token, a default branch too large for one tree: code search, never stored, scanned every time', async (t) => {
+test('with a token, a default branch too large for one tree: code search naming no index commit, not stored, scanned every time', async (t) => {
   const directory = storeDirectory(t);
   for (let i = 0; i < 2; i++) {
     const searched = await atlas(['scan', 'github.com/JetBrains/example'], { directory, token: 'test', large: true });
@@ -148,6 +151,141 @@ test('an index that caught up: the next code search finds the skill the last one
   assert.equal((await scan(await open(github(MAIN, { large: true })), store)).result.skills.length, 1);
 });
 
+// Code search, with each result naming the commit the index reflects in the `?ref=` of its url.
+const SEARCH = 'https://api.github.com/search/code?q=filename:SKILL.md+repo:JetBrains/example&per_page=100&page=';
+const COMPARE = `https://api.github.com/repos/JetBrains/example/compare/${MAIN}...${NEXT}`;
+const item = (path: string, ref: string) => ({
+  path,
+  url: `https://api.github.com/repositories/1/contents/${path}?ref=${ref}`,
+  html_url: `https://github.com/JetBrains/example/blob/${ref}/${path}`,
+});
+const skill = (name: string) => `---\nname: ${name}\ndescription: The ${name} skill.\n---\n`;
+
+/**
+ * A default branch too large for one tree, at `head`, its code search answering `items` on one
+ * page; `answer` adds to the search's answer, `more` to the recording.
+ */
+function searched(head: string, items: { path: string }[], answer: object = {}, more: Recording = {}): Recording {
+  return {
+    ...github(head, { large: true }),
+    [`${SEARCH}1`]: { status: 200, body: { total_count: items.length, incomplete_results: false, items, ...answer } },
+    ...more,
+  };
+}
+
+/** `skill-atlas scan` of the default branch with a token, GitHub answering from the recording. */
+async function scanSearched(recording: Recording, directory: string) {
+  const requests: string[] = [];
+  const recorded = replay(recording);
+  const fetch = (url: string) => (requests.push(url), recorded(url));
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  const code = await run(['scan', 'github.com/JetBrains/example'], {
+    open: (input) => openGitHub(input, { fetch, token: 'test' }),
+    store: openStore(directory),
+    print: (text) => stdout.push(text),
+    error: (text) => stderr.push(text),
+    serve: () => Promise.reject(new Error('not served')),
+  });
+  assert.equal(code, 0, stderr.join('\n'));
+  return { stdout: stdout.join('\n'), stderr: stderr.join('\n'), requests };
+}
+
+/** The index at MAIN, main at NEXT: a skill kept, one removed, one renamed, one added since. */
+function lagging(compare: object = {}, answer: object = {}): Recording {
+  const raw = (path: string, body: string) => ({ [`https://raw.githubusercontent.com/JetBrains/example/${NEXT}/${path}`]: { status: 200, body } });
+  const items = [SKILL, '.agents/skills/old/SKILL.md', '.agents/skills/before/SKILL.md'].map((path) => item(path, MAIN));
+  return searched(NEXT, items, answer, {
+    [COMPARE]: {
+      status: 200,
+      body: {
+        status: 'ahead',
+        files: [
+          { filename: '.github/skills/new/SKILL.md', status: 'added' },
+          { filename: '.agents/skills/old/SKILL.md', status: 'removed' },
+          { filename: '.agents/skills/after/SKILL.md', previous_filename: '.agents/skills/before/SKILL.md', status: 'renamed' },
+          { filename: SKILL, status: 'modified' },
+          { filename: 'README.md', status: 'added' },
+        ],
+        ...compare,
+      },
+    },
+    ...raw('.github/skills/new/SKILL.md', skill('new')),
+    ...raw('.agents/skills/after/SKILL.md', skill('after')),
+    ...raw('.agents/skills/before/SKILL.md', skill('before')),
+    // Gone at the head: read only if the list was not caught up; the 404 checks the token.
+    'https://api.github.com/rate_limit': { status: 200, body: { resources: {} } },
+    [`https://raw.githubusercontent.com/JetBrains/example/${NEXT}/.agents/skills/old/SKILL.md`]: { status: 404, body: '404: Not Found' },
+  });
+}
+
+test('code search, the index at the resolved commit: stored under its own key, the next scan only resolves', async (t) => {
+  const directory = storeDirectory(t);
+  const recording = searched(MAIN, [item(SKILL, MAIN)]);
+  const first = await scanSearched(recording, directory);
+  assert.match(first.stdout, /As of the first commit\./);
+  assert.ok(first.requests.some((url) => url.startsWith(SEARCH)));
+  assert.ok(!first.requests.some((url) => url.includes('/compare/')), 'no compare when the index is current');
+  assert.equal(readdirSync(directory).length, 1);
+  const again = await scanSearched(recording, directory);
+  assert.deepEqual(again.requests, RESOLVE);
+  assert.equal(again.stdout, first.stdout);
+  // Its own key: a scan that lists the tree does not get it, and finds the roots.
+  const roots = await atlas(['scan', 'github.com/JetBrains/example'], { directory, large: true });
+  assert.ok(roots.requests.length > RESOLVE.length);
+  assert.match(roots.stderr, /too large/);
+  assert.equal(readdirSync(directory).length, 2);
+});
+
+test('code search, the index behind the head: caught up by the compare (added, removed, renamed) and stored', async (t) => {
+  const directory = storeDirectory(t);
+  const first = await scanSearched(lagging(), directory);
+  assert.ok(first.requests.includes(COMPARE));
+  assert.equal(first.stderr, '');
+  const names = [...first.stdout.matchAll(/^(\S+) — /gm)].map((match) => match[1]);
+  assert.deepEqual(names, ['after', 'commits', 'new']);
+  assert.match(first.stdout, /As of the next commit\./);
+  assert.ok(!first.requests.some((url) => url.includes('/old/') || url.includes('/before/')), 'removed and renamed are not read');
+  assert.equal(readdirSync(directory).length, 1);
+  const again = await scanSearched(lagging(), directory);
+  assert.deepEqual(again.requests, RESOLVE);
+  assert.equal(again.stdout, first.stdout);
+});
+
+test('code search not exact for the commit: not stored, scanned every time', async (t) => {
+  const many = Array.from({ length: COMPARE_FILES }, (_, i) => ({ filename: `src/${i}.ts`, status: 'added' }));
+  const cases: [string, Recording][] = [
+    ['no result', searched(MAIN, [])],
+    ['results naming different commits', searched(MAIN, [item(SKILL, MAIN), item('.agents/skills/x/SKILL.md', NEXT)])],
+    ['a result naming no commit', searched(MAIN, [item(SKILL, MAIN), { path: '.agents/skills/x/SKILL.md' }])],
+    ['incomplete results', searched(MAIN, [item(SKILL, MAIN)], { incomplete_results: true })],
+    ['more than 1000 results', searched(MAIN, [item(SKILL, MAIN)], { total_count: 1001 })],
+    ['a compare not ahead', lagging({ status: 'diverged' })],
+    ['a compare too large', lagging({ files: many })],
+    ['a SKILL.md changed otherwise', lagging({ files: [{ filename: SKILL, status: 'changed' }] })],
+  ];
+  for (const [name, recording] of cases) {
+    const directory = storeDirectory(t);
+    for (let i = 0; i < 2; i++) {
+      const scanned = await scanSearched(recording, directory);
+      assert.ok(scanned.requests.some((url) => url.startsWith(SEARCH)), `${name}: searched every time`);
+    }
+    assert.deepEqual(readdirSync(directory), [], name);
+  }
+});
+
+test('code search, the index behind the head: a skill added since is found, even when the scan is not stored', async (t) => {
+  const directory = storeDirectory(t);
+  const scanned = await scanSearched(lagging({}, { incomplete_results: true }), directory);
+  assert.ok(scanned.requests.includes(COMPARE));
+  assert.match(scanned.stdout, /^new — The new skill\./m);
+  assert.deepEqual(readdirSync(directory), []);
+  // A compare not to be trusted: the search list as it is.
+  const diverged = await scanSearched(lagging({ status: 'diverged' }), storeDirectory(t));
+  assert.doesNotMatch(diverged.stdout, /^new — /m);
+  assert.match(diverged.stdout, /^before — /m);
+});
+
 test('a tree in one answer: one stored scan for every ref, with a token or without', async (t) => {
   const directory = storeDirectory(t);
   const first = await atlas(['scan', 'github.com/JetBrains/example'], { directory });
@@ -167,7 +305,7 @@ test('a tree in one answer: one stored scan for every ref, with a token or witho
   );
 });
 
-test('a tree too large: the roots, stored apart for the default branch and a ref; with a token, code search, never stored', async (t) => {
+test('a tree too large: the roots, stored apart for the default branch and a ref; with a token, code search, not the roots', async (t) => {
   const directory = storeDirectory(t);
   const large = true;
   const hint = 'warning: the tree is too large to list at once; looked only in .agents/skills, .claude/skills, .github/skills, agent/skills';
@@ -176,7 +314,7 @@ test('a tree too large: the roots, stored apart for the default branch and a ref
   assert.match(roots.stdout, /As of the first commit\./);
   assert.equal(roots.stderr, `${hint} (GITHUB_TOKEN searches everywhere)`);
   assert.equal(readdirSync(directory).length, 1);
-  // With a token: code search, not the stored roots, and not stored; every time.
+  // With a token: code search, not the stored roots; its results name no index commit, so not stored.
   for (let i = 0; i < 2; i++) {
     const searched = await atlas(['scan', 'github.com/JetBrains/example'], { directory, large, token: 'test' });
     assert.ok(searched.requests.some((url) => url.includes('/search/code')));
