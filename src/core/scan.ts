@@ -28,8 +28,11 @@ export type StoredScan = {
   /** Opens the stored result with `Store.open`. */
   id: string;
   repository: Repository;
-  /** What was asked for: `main (default branch)`, or the ref of `/tree/<ref>`. */
-  ref: string;
+  /**
+   * Every ref asked for, in order: `main (default branch)`, the ref of `/tree/<ref>`. Refs at the
+   * same commit share the stored scan.
+   */
+  refs: string[];
   skills: number;
   warnings: number;
   /** When it was scanned, an ISO 8601 time. */
@@ -39,7 +42,10 @@ export type StoredScan = {
 /** Where results are kept between scans, by the source's key. */
 export type Store = {
   get(key: string): Promise<ScanResult | undefined>;
-  set(key: string, scan: { ref: string; result: ScanResult }): Promise<void>;
+  /** Stores a new scan; whether it was stored. */
+  set(key: string, scan: { ref: string; result: ScanResult }): Promise<boolean>;
+  /** Records one more ref asked for of a stored scan; whether the scan is stored. */
+  addRef(key: string, ref: string): Promise<boolean>;
   /** The id a key's scan is stored under, as `list` and `open` know it. */
   id(key: string): string;
   /** Every stored scan, the latest first. */
@@ -48,17 +54,21 @@ export type Store = {
   open(id: string): Promise<ScanResult | undefined>;
 };
 
+/** A scan's result, and the id of the stored scan it is, or null when it is not stored. */
+export type Scanned = { result: ScanResult; stored: string | null };
+
 /**
  * fetch → find → parse. With a store, a source with a key is scanned once: the next time, the
  * stored result. A failed scan is not stored.
  */
-export async function scan(source: Source, store?: Store): Promise<ScanResult> {
-  if (!store || !source.key) return scanFiles(source);
-  const stored = await store.get(source.key);
-  if (stored) return stored;
+export async function scan(source: Source, store?: Store): Promise<Scanned> {
+  if (!store || !source.key) return { result: await scanFiles(source), stored: null };
+  const id = store.id(source.key);
+  const ref = source.ref ?? '';
+  const hit = await store.get(source.key);
+  if (hit) return { result: hit, stored: (await store.addRef(source.key, ref)) ? id : null };
   const result = await scanFiles(source);
-  await store.set(source.key, { ref: source.ref ?? '', result });
-  return result;
+  return { result, stored: (await store.set(source.key, { ref, result })) ? id : null };
 }
 
 async function scanFiles(source: Source): Promise<ScanResult> {

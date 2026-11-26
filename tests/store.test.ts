@@ -31,6 +31,7 @@ function github(head: string): Recording {
     'https://api.github.com/repos/JetBrains/example': { status: 200, body: { full_name: 'JetBrains/example', default_branch: 'main' } },
     'https://api.github.com/repos/JetBrains/example/commits/main': { status: 200, body: { sha: head } },
     [`https://api.github.com/repos/JetBrains/example/commits/${MAIN}`]: { status: 200, body: { sha: MAIN } },
+    'https://api.github.com/repos/JetBrains/example/commits/v1.0': { status: 200, body: { sha: MAIN } },
     'https://api.github.com/search/code?q=filename:SKILL.md+repo:JetBrains/example&per_page=100&page=1': {
       status: 200,
       body: { total_count: 1, items: [{ path: SKILL }] },
@@ -110,8 +111,8 @@ test('an index that caught up: the next code search finds the skill the last one
   const lagging = github(MAIN);
   lagging[search] = { status: 200, body: { total_count: 0, items: [] } };
   const open = (recording: Recording) => openGitHub('github.com/JetBrains/example', { fetch: replay(recording), token: 'test' });
-  assert.equal((await scan(await open(lagging), store)).skills.length, 0);
-  assert.equal((await scan(await open(github(MAIN)), store)).skills.length, 1);
+  assert.equal((await scan(await open(lagging), store)).result.skills.length, 0);
+  assert.equal((await scan(await open(github(MAIN)), store)).result.skills.length, 1);
 });
 
 test('the key is the commit and whether it was the default branch: the default branch and /tree/<ref> are stored apart', async (t) => {
@@ -125,7 +126,21 @@ test('the key is the commit and whether it was the default branch: the default b
   for (const args of [['scan', 'github.com/JetBrains/example'], ['scan', `github.com/JetBrains/example/tree/${MAIN}`]]) {
     assert.equal((await atlas(args, { directory })).requests.length, 2, args.join(' '));
   }
-  assert.deepEqual((await openStore(directory).list()).map((stored) => stored.ref).sort(), [MAIN, 'main (default branch)']);
+  assert.deepEqual((await openStore(directory).list()).map((stored) => stored.refs).sort(), [[MAIN], ['main (default branch)']]);
+});
+
+test('two refs at one commit: one stored scan, scanned once, and both refs recorded, in order', async (t) => {
+  const directory = storeDirectory(t);
+  const store = openStore(directory);
+  const open = (ref: string) => openGitHub(`github.com/JetBrains/example/tree/${ref}`, { fetch: replay(github(MAIN)) });
+  const first = await scan(await open(MAIN), store);
+  const second = await atlas(['scan', 'github.com/JetBrains/example/tree/v1.0'], { directory });
+  assert.equal(second.requests.length, 2); // resolved; listed and read from the store
+  await scan(await open('v1.0'), store); // already recorded: the same refs
+  const again = await scan(await open(MAIN), store);
+  assert.equal(again.stored, first.stored);
+  const scans = await store.list();
+  assert.deepEqual(scans.map((stored) => [stored.id, stored.refs]), [[first.stored, [MAIN, 'v1.0']]]);
 });
 
 test('warnings are stored with the result', async (t) => {
@@ -138,7 +153,7 @@ test('warnings are stored with the result', async (t) => {
   recording[`https://raw.githubusercontent.com/JetBrains/example/${MAIN}/${missing}`] = { status: 404, body: '404: Not Found' };
   const store = openStore(directory);
   const open = () => openGitHub('github.com/JetBrains/example', { fetch: replay(recording) });
-  const first = await scan(await open(), store);
+  const { result: first } = await scan(await open(), store);
   assert.deepEqual(first.warnings, [`${missing}: listed, but not found at the scanned commit; skipped`]);
   const again = await openStore(directory).get((await open()).key!);
   assert.deepEqual(again, first);
@@ -201,6 +216,15 @@ test('an unwritable store directory: the scan goes on, nothing is stored', async
   assert.equal(scanned.code, 0, scanned.stderr);
   assert.match(scanned.stdout, /As of the first commit\./);
   assert.equal((await atlas(['scan', 'github.com/JetBrains/example'], { directory })).code, 0);
+  // Not stored, so the page is not told it is: stored is null.
+  const { result, stored } = await scan(await openGitHub('github.com/JetBrains/example', { fetch: replay(github(MAIN)) }), openStore(directory));
+  assert.equal(result.skills.length, 1);
+  assert.equal(stored, null);
+  const server = createWebServer({ open: (input) => openGitHub(input, { fetch: replay(github(MAIN)) }), store: openStore(directory) });
+  const base = await listen(server, 0);
+  t.after(() => server.close());
+  const body = (await (await fetch(`${base}/api/scan?repo=${encodeURIComponent('github.com/JetBrains/example')}`)).json()) as { stored: unknown };
+  assert.equal(body.stored, null);
 });
 
 test('the web view shares the store with the CLI', async (t) => {
@@ -246,14 +270,14 @@ test('every stored scan, the latest first: repository, commit, what was asked fo
     [
       {
         repository: { id: 'JetBrains/example', organization: 'JetBrains', name: 'example', url: 'https://github.com/JetBrains/example', commit: NEXT },
-        ref: 'main (default branch)',
+        refs: ['main (default branch)'],
         skills: 1,
         warnings: 0,
         scannedAt: '2026-11-26T10:01:00.000Z',
       },
       {
         repository: { id: 'JetBrains/example', organization: 'JetBrains', name: 'example', url: 'https://github.com/JetBrains/example', commit: MAIN },
-        ref: MAIN,
+        refs: [MAIN],
         skills: 1,
         warnings: 0,
         scannedAt: '2026-11-26T10:00:00.000Z',
@@ -296,8 +320,8 @@ test('/api/scans: the stored scans; /api/scans/<id>: one, as /api/scan answers i
   assert.equal(scanned.status, 200);
   const { scans } = (await get('/api/scans')).body;
   assert.equal(scans.length, 1);
-  assert.deepEqual(Object.keys(scans[0]), ['id', 'repository', 'ref', 'skills', 'warnings', 'scannedAt']);
-  assert.equal(scans[0].ref, 'main (default branch)');
+  assert.deepEqual(Object.keys(scans[0]), ['id', 'repository', 'refs', 'skills', 'warnings', 'scannedAt']);
+  assert.deepEqual(scans[0].refs, ['main (default branch)']);
   // /api/scan names the stored scan, so the page marks it; again, from the store, the same.
   assert.equal(scanned.body.stored, scans[0].id);
   assert.deepEqual(await get(`/api/scan?repo=${encodeURIComponent('github.com/JetBrains/example')}`), scanned);

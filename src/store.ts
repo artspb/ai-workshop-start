@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import type { ScanResult, Store, StoredScan } from './core/scan.ts';
 
 /** Bump when the scan finds or words anything differently: older results are then not used. */
-const VERSION = 3;
+const VERSION = 4;
 
 /** `SKILL_ATLAS_CACHE`, else `$XDG_CACHE_HOME/skill-atlas`, else `~/.cache/skill-atlas`. */
 export function cacheDirectory(env: Record<string, string | undefined>): string {
@@ -16,7 +16,7 @@ export function cacheDirectory(env: Record<string, string | undefined>): string 
   return join(env.XDG_CACHE_HOME || join(homedir(), '.cache'), 'skill-atlas');
 }
 
-type Entry = { version: number; key: string; ref: string; scannedAt: string; result: ScanResult };
+type Entry = { version: number; key: string; refs: string[]; scannedAt: string; result: ScanResult };
 
 /** A stored scan's id: its file name, a hash of its key. Nothing else names a file. */
 const ID = /^[0-9a-f]{64}$/;
@@ -35,23 +35,40 @@ export function openStore(directory: string, now: () => Date = () => new Date())
     }
   }
 
+  /** Whether it was written. Written aside, then renamed: a scan at the same time never reads half a file. */
+  async function write(entry: Entry): Promise<boolean> {
+    const temporary = `${file(id(entry.key))}.${randomUUID()}.tmp`;
+    try {
+      await mkdir(directory, { recursive: true });
+      await writeFile(temporary, JSON.stringify(entry));
+      await rename(temporary, file(id(entry.key)));
+      return true;
+    } catch {
+      await rm(temporary, { force: true });
+      return false;
+    }
+  }
+
+  /** The key's entry; another key under the same id is not it. */
+  async function entryOf(key: string): Promise<Entry | undefined> {
+    const entry = await read(id(key));
+    return entry?.key === key ? entry : undefined;
+  }
+
   return {
-    async get(key) {
-      const entry = await read(id(key));
-      return entry?.key === key ? entry.result : undefined;
-    },
     id,
-    async set(key, { ref, result }) {
-      const entry: Entry = { version: VERSION, key, ref, scannedAt: now().toISOString(), result };
-      // Written aside, then renamed: a scan at the same time never reads half a file.
-      const temporary = `${file(id(key))}.${randomUUID()}.tmp`;
-      try {
-        await mkdir(directory, { recursive: true });
-        await writeFile(temporary, JSON.stringify(entry));
-        await rename(temporary, file(id(key)));
-      } catch {
-        await rm(temporary, { force: true });
-      }
+    async get(key) {
+      return (await entryOf(key))?.result;
+    },
+    set(key, { ref, result }) {
+      return write({ version: VERSION, key, refs: [ref], scannedAt: now().toISOString(), result });
+    },
+    async addRef(key, ref) {
+      const entry = await entryOf(key);
+      if (!entry) return false;
+      // Not recorded if it cannot be written: the scan is still stored.
+      if (!entry.refs.includes(ref)) await write({ ...entry, refs: [...entry.refs, ref] });
+      return true;
     },
     async list() {
       const names = await readdir(directory).catch(() => [] as string[]);
@@ -61,7 +78,7 @@ export function openStore(directory: string, now: () => Date = () => new Date())
         const entry = await read(scanId);
         if (!entry) continue;
         const { repository, skills, warnings } = entry.result;
-        scans.push({ id: scanId, repository, ref: entry.ref, skills: skills.length, warnings: warnings.length, scannedAt: entry.scannedAt });
+        scans.push({ id: scanId, repository, refs: entry.refs, skills: skills.length, warnings: warnings.length, scannedAt: entry.scannedAt });
       }
       // The latest first; the same time, by repository then commit.
       const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
