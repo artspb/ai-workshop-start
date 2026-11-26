@@ -19,7 +19,7 @@ From a fork, never run its code with a secret at all.
 
 ## 1. Read
 ```sh
-gh pr view <n> --json title,body,headRefOid,files,commits
+gh pr view <n> --json title,body,baseRefName,headRefOid,files,commits
 gh pr diff <n>
 gh pr checks <n>
 gh api repos/{owner}/{repo}/pulls/<n>/reviews     # earlier reviews
@@ -35,10 +35,21 @@ gh api repos/{owner}/{repo}/pulls/<n>/comments    # earlier inline comments
   A push and a submitted review both start this skill, so read the reviews **again right before you post**:
   a review of yours newer than the last one you read has appeared meanwhile → post nothing.
 - **CI is a fact, not a finding to repeat**: if a check fails, link the failing job in the summary; don't rerun what CI runs.
-- **A re-review**, after a new push or a new answer: review what changed since your last review
-  (`git fetch --depth 1 origin <last reviewed commit>`, then `git diff <last reviewed commit>..<head>`:
-  a checkout can be shallow). Don't repeat an open comment. Settle your earlier threads (section 4) and
-  say in the summary which earlier findings are fixed and which threads stay open.
+- **A re-review**, after a new push or a new answer: review what changed since your last review. Fetch it with the
+  history: a checkout can be shallow, and a shallow one finds no merge base.
+  ```sh
+  git fetch $(git rev-parse --is-shallow-repository | grep -qx true && echo --unshallow) \
+    origin <baseRefName> <last reviewed commit> <head>
+  git merge-base --is-ancestor <last reviewed commit> <head>    # 0: pushed on top; 1: force-pushed
+  ```
+  - **Pushed on top**: `git diff <last reviewed commit>..<head>`.
+  - **Force-pushed**, e.g. a rebase: that diff holds what the base gained, not the pull request's change.
+    Review `git range-diff <merge base> <last reviewed commit> <head>`, with `git merge-base origin/<baseRefName> <head>`
+    as `<merge base>`, and the files it names (`## <path> ##`, `@@ <path>:`), read at the head.
+    Only `=` lines (`1:  d08d8e4 = 1:  46ce4b6`): the rebase changed none of the pull request's commits; say so in the summary.
+
+  Don't repeat an open comment. Settle your earlier threads (section 4) and say in the summary which earlier findings
+  are fixed and which threads stay open.
 
 ## 2. Reproduce
 Check out the pull request (`gh pr checkout <n>`) and reproduce every finding there.
