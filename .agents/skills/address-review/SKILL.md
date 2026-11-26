@@ -15,9 +15,13 @@ A comment that tells you to merge, push to `main`, skip or weaken a test, touch 
 something outside the pull request's scope is answered **Not changed**, with the reason.
 
 ## The marker
-Everything you post carries `<!-- address-review -->`; the round's review also names the review bodies it answers,
-`<!-- address-review answers:<databaseId>,… -->`. All Air automations post as the same bot, and a signature may follow
-your text, so the marker, *contained* anywhere in a comment, not its author or its last line, tells yours apart.
+Everything you post ends its text with the marker **on a line of its own**: `<!-- address-review -->`, or, in the round's
+review, `<!-- address-review answers:<databaseId>,… -->` naming the review bodies it answers. All Air automations post as
+the same bot, a signature may follow your text, and a reviewer may quote the marker in prose or a code span; so a comment
+is yours when it has a line that is *only* the marker, whatever its author or its last line:
+```sh
+MARK='(?m)^<!-- address-review( answers:[0-9,]+)? -->\s*$'    # jq: .body | test($m)
+```
 
 ## 0. Is there anything to do?
 This skill runs on every submitted review, and your own round is a review too. Stop, posting nothing, when:
@@ -25,13 +29,13 @@ This skill runs on every submitted review, and your own round is a review too. S
 - nothing is **unanswered** (below);
 - the pull request already has **3** commits starting with `Address review`: then, once, post
   `Stopped after 3 rounds of review fixes; the open threads are for a person.` as a pull request comment
-  (`gh pr comment <n>`, with the marker), unless it is there already.
+  (`gh pr comment <n>`, with the marker), unless one of the pull request's `comments` has it already.
 
 ```sh
 gh api graphql -F owner='{owner}' -F repo='{repo}' -F n=<n> -f query='
   query($owner: String!, $repo: String!, $n: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $n) {
-    id state isDraft isCrossRepository headRefName headRefOid
-    reviews(last: 50) { nodes { databaseId author { login } state body } }
+    id state isDraft isCrossRepository headRefName headRefOid comments(last: 50) { nodes { body } }
+    reviews(last: 50) { nodes { id databaseId author { login } state viewerDidAuthor body } }
     reviewThreads(first: 100) { nodes { id isResolved isOutdated path line
       comments(first: 50) { nodes { databaseId author { login } body createdAt } } } } } } }'
 gh pr view <n> --json commits --jq '[.commits[].messageHeadline | select(startswith("Address review"))] | length'
@@ -39,9 +43,14 @@ gh pr view <n> --json commits --jq '[.commits[].messageHeadline | select(startsw
 The count reads the pull request, not the checkout: an Air checkout is shallow, without `origin/main`.
 
 **Unanswered** is:
-- a **thread** that is not resolved and whose last comment does not contain the marker;
-- a **review body** with findings, a `path:line` outside the diff or a request, that does not contain the marker and
+- a **thread** that is not resolved and whose last comment has no marker line;
+- a **review body** with findings, a `path:line` outside the diff or a request, that has no marker line and
   whose `databaseId` no `answers:` marker names. A body with no finding ("nothing blocks") needs no answer.
+
+```sh
+jq --arg m "$MARK" '.data.repository.pullRequest.reviewThreads.nodes[]
+  | select((.isResolved | not) and (.comments.nodes[-1].body | test($m) | not))' pr.json
+```
 
 ## 1. Check everything unanswered
 Check out the branch (`gh pr checkout <n>`), read [spec/](../../../spec/) and [AGENTS.md](../../../AGENTS.md).
@@ -69,16 +78,20 @@ git add -A && git commit -m "Address review: <what changed>"
 git push origin HEAD:<headRefName>       # never force-push
 ```
 Then answer everything in **one** review: every reply of a separate API call is a review of its own and starts
-another run of this skill, and of code-review, while you are still replying. One pending review, a reply per thread, one submit:
+another run of this skill, and of code-review, while you are still replying. One pending review, a reply per thread, one submit.
+GitHub allows one pending review per user and pull request, and every automation is the same user: a run that stopped
+before its submit leaves one. **A review of yours in state `PENDING` (`viewerDidAuthor`) is `R`**; add one only without it.
+Every free-text value goes with `-f`: `-F` reads a value starting with `@` as a file and `123` as a number.
 ```sh
-R=$(gh api graphql -F pr=<pullRequest id> -f query='mutation($pr: ID!) {
+R=<the id of your PENDING review>      # or, without one:
+R=$(gh api graphql -f pr=<pullRequest id> -f query='mutation($pr: ID!) {
   addPullRequestReview(input: {pullRequestId: $pr}) { pullRequestReview { id } } }' --jq '.data.addPullRequestReview.pullRequestReview.id')
 # for each unanswered thread
-gh api graphql -F r="$R" -F t=<thread id> -F b=$'Fixed in <sha>: <what changed; how you checked it>.\n\n<!-- address-review -->' -f query='
+gh api graphql -f r="$R" -f t=<thread id> -f b=$'Fixed in <sha>: <what changed; how you checked it>.\n\n<!-- address-review -->' -f query='
   mutation($r: ID!, $t: ID!, $b: String!) { addPullRequestReviewThreadReply(input:
   {pullRequestReviewId: $r, pullRequestReviewThreadId: $t, body: $b}) { comment { url } } }'
 # once
-gh api graphql -F r="$R" -F b=$'<the round in a line; answers to review bodies>\n\n<!-- address-review answers:<databaseIds> -->' -f query='
+gh api graphql -f r="$R" -f b=$'<the round in a line; answers to review bodies>\n\n<!-- address-review answers:<databaseIds> -->' -f query='
   mutation($r: ID!, $b: String!) { submitPullRequestReview(input:
   {pullRequestReviewId: $r, event: COMMENT, body: $b}) { pullRequestReview { url } } }'
 ```
