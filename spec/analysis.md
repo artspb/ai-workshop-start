@@ -1,6 +1,8 @@
 # Repository analysis
 ## Input
 A **GitHub repository** URL, or a local directory
+- `github.com/<owner>/<repo>`: the default branch
+- `github.com/<owner>/<repo>/tree/<ref>`: a commit, a branch or a tag; one path segment
 ## Output
 Every *project skill*: **name**, **description**, **link**
 ## What a project skill is
@@ -24,6 +26,7 @@ Skill: id = `repo:path`, name, description, commit, copies
 ## Details
 - **GitHub API**, no clone; *under 5 s* for intellij-community
 - A tree too large for one answer: only the roots at the repository root, and a *warning*; with `GITHUB_TOKEN`, code search finds every root
+- Code search sees only the default branch: a `/tree/<ref>` scan always lists the tree
 - The name: front matter, else the directory
 - The link pins the *scanned commit*; for a local directory, the file itself
 - Malformed or missing front matter → a *warning*, the scan goes on

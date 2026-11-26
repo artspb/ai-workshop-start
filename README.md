@@ -13,7 +13,9 @@ build-tools-bump-gradle-api — Bumps the Gradle API version that Kotlin Gradle 
 …
 ```
 
-Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests.
+Add `/tree/<commit>` to scan a commit, a branch or a tag. Set `GITHUB_TOKEN` for a higher GitHub rate limit.
+`npm test` runs the tests; `npm run e2e` scans real repositories at fixed commits and compares with
+[tests/e2e/](tests/e2e/).
 
 - [spec/](spec/): what it does. [AGENTS.md](AGENTS.md): the definition of done.
 - [fixture/](fixture/README.md): a small repository for the tests.

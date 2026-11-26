@@ -10,7 +10,7 @@ import { pathToFileURL } from 'node:url';
 import { test } from 'node:test';
 import { run } from '../src/commands.ts';
 import { findSkills } from '../src/core/find.ts';
-import { openGitHub } from '../src/core/github.ts';
+import { openGitHub, parseGitHubUrl } from '../src/core/github.ts';
 import { parseSkill } from '../src/core/parse.ts';
 import { replay } from '../src/core/replay.ts';
 import { atlas, CLI, EXAMPLE_COMMIT, FIXTURE } from './helpers.ts';
@@ -163,4 +163,30 @@ test('rate limit → a message that asks for GITHUB_TOKEN', async () => {
   await assert.rejects(openGitHub('https://github.com/JetBrains/MPS', { fetch: limited }), {
     message: 'GitHub rate limit reached; set GITHUB_TOKEN',
   });
+});
+
+test('/tree/<ref>: that commit, listed through its tree even with a token; an unknown ref, a clear message', async () => {
+  const commit = '1111111111111111111111111111111111111111';
+  const github = replay({
+    'https://api.github.com/repos/JetBrains/example': { status: 200, body: { full_name: 'JetBrains/example', default_branch: 'main' } },
+    'https://api.github.com/repos/JetBrains/example/commits/v1.0': { status: 200, body: { sha: commit } },
+    [`https://api.github.com/repos/JetBrains/example/git/trees/${commit}?recursive=1`]: {
+      status: 200,
+      body: { truncated: false, tree: [{ path: '.claude/skills/commits/SKILL.md', mode: '100644', type: 'blob', sha: '0' }] },
+    },
+    [`https://raw.githubusercontent.com/JetBrains/example/${commit}/.claude/skills/commits/SKILL.md`]: {
+      status: 200,
+      body: '---\nname: commits\ndescription: Commit messages, as of v1.0.\n---\n',
+    },
+    'https://api.github.com/repos/JetBrains/example/commits/no-such-ref': { status: 404, body: { message: 'Not Found' } },
+  });
+  // No search is recorded: a search would fail the scan.
+  const source = await openGitHub('https://github.com/JetBrains/example/tree/v1.0/', { fetch: github, token: 'test' });
+  assert.equal(source.repository.commit, commit);
+  assert.deepEqual(source.paths, ['.claude/skills/commits/SKILL.md']);
+
+  await assert.rejects(openGitHub('github.com/JetBrains/example/tree/no-such-ref', { fetch: github, token: 'test' }), {
+    message: 'Not found in https://github.com/JetBrains/example: no-such-ref',
+  });
+  assert.equal(parseGitHubUrl('github.com/JetBrains/example/tree/main/docs'), undefined);
 });
