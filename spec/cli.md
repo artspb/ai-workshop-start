@@ -14,3 +14,6 @@ build-tools-bump-gradle-api — Bumps the Gradle API…
 Real repositories, each at a fixed commit: `tests/e2e/<owner>-<repo>.txt` is what the scan prints, stdout then stderr.
 - `npm run e2e` compares; `UPDATE=1 npm run e2e` rewrites the files
 - Live GitHub: CI passes its `GITHUB_TOKEN`
+## Web view
+`./skill-atlas serve [--port <port>]`: the same scan in a browser; see [web.md](web.md).
+A port in use or not a number → a clear message, exit code 1.

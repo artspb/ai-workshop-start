@@ -1,0 +1,35 @@
+:root {
+  color-scheme: light dark;
+  --muted: #6b7280;
+  --border: #d1d5db;
+  --accent: #2563eb;
+  --error: #b91c1c;
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --muted: #9ca3af; --border: #374151; --accent: #60a5fa; --error: #f87171; }
+}
+body { max-width: 56rem; margin: 0 auto; padding: 2rem 1rem; }
+h1 { margin: 0; }
+header p { margin: 0 0 1rem; color: var(--muted); }
+form { display: flex; gap: 0.5rem; }
+input, button { font: inherit; padding: 0.4rem 0.7rem; border: 1px solid var(--border); border-radius: 6px; }
+form input { flex: 1; }
+button { cursor: pointer; }
+form button { background: var(--accent); border-color: var(--accent); color: white; }
+a { color: var(--accent); }
+#status.error { color: var(--error); white-space: pre-wrap; }
+.summary { display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+.summary h2 { margin: 1.5rem 0 0.5rem; }
+#commit { color: var(--muted); font-family: ui-monospace, monospace; }
+#filter { width: 100%; box-sizing: border-box; }
+#skills, #warnings ul { list-style: none; padding: 0; }
+.skill { border-bottom: 1px solid var(--border); padding: 0.75rem 0; }
+.skill h3 { margin: 0; }
+.skill p { margin: 0.25rem 0; }
+.description { white-space: pre-wrap; }
+.link, .copies { font-size: 0.875rem; color: var(--muted); overflow-wrap: anywhere; }
+.copy { margin-left: 0.5rem; padding: 0 0.5rem; font-size: 0.8rem; }
+#warnings li { color: var(--error); font-size: 0.875rem; font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
+[hidden] { display: none !important; }

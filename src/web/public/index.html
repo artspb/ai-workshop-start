@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Skill Atlas</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>Skill Atlas</h1>
+      <p>Every project skill in a repository.</p>
+      <form id="scan">
+        <input id="repo" name="repo" type="text" required autocomplete="off" spellcheck="false"
+          aria-label="GitHub URL or directory" placeholder="https://github.com/JetBrains/kotlin or ./path/to/checkout" />
+        <button type="submit">Scan</button>
+      </form>
+    </header>
+    <main>
+      <p id="status" role="status" hidden></p>
+      <section id="result" hidden>
+        <div class="summary">
+          <h2><a id="repository"></a> · <span id="count"></span></h2>
+          <span id="commit"></span>
+        </div>
+        <input id="filter" type="search" placeholder="Filter by name or description" aria-label="Filter skills" />
+        <p id="empty" hidden>No skill matches the filter.</p>
+        <ul id="skills"></ul>
+        <section id="warnings" hidden>
+          <h3>Warnings</h3>
+          <ul></ul>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>
