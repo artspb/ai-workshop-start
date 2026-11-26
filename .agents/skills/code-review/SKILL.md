@@ -68,12 +68,14 @@ or a person's) gets a **light check**, not the whole review again, when **all** 
   B=$(git merge-base origin/<baseRefName> <head>)
   git range-diff "$B" <reviewed head> <head>
   git cherry -v <head> <reviewed head>    # -: its change is in the head; +: it is not, or not as it was
+  git rev-list --merges "$B"..<head>     # a merge commit, which the range-diff leaves out
   ```
   Each of the pull request's commits pairs with one of the head's: `=` (unchanged), or `!` only in a file whose
   conflict a rebase comment on the pull request names (merge-when-reviewed's `Rebased onto …`). The comment only
   points at the files; the range-diff decides. A `<` line is fine only for a commit `git cherry` marks `-`:
   the base gained it already, e.g. a stacked pull request that was merged. Any `>` line, a `<` marked `+`,
-  or a `!` in a file no rebase comment names: not only a rebase.
+  or a `!` in a file no rebase comment names: not only a rebase. Nor is a head with a merge commit, which the
+  range-diff leaves out: `git rev-list --merges "$B"..<head>` must print nothing.
 - **Nothing asks you something**: no comment or review newer than your last review asks Code Review anything.
 
 Then the light check, and nothing more:
