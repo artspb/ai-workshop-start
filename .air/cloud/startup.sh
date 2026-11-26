@@ -9,6 +9,7 @@ set -euo pipefail
 # The Playwright the skills record with (issue-to-pr, manual-qa), unless node_modules has one of its own.
 PLAYWRIGHT=1.65.1
 NODE_MAJOR=24 # package.json: "engines": { "node": ">=24" }
+LINK_DIR=${STARTUP_LINK_DIR:-/usr/local/bin} # where a Node from nvm is linked; the tests set a folder of their own
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 LOG=$(mktemp)
@@ -49,6 +50,11 @@ if [ "$(node_major)" -lt "$NODE_MAJOR" ]; then
   set +u; . "$NVM_DIR/nvm.sh"; set -u
   step "installed Node $NODE_MAJOR" bash -c ". '$NVM_DIR/nvm.sh' && nvm install $NODE_MAJOR && nvm alias default $NODE_MAJOR"
   set +u; nvm use --silent default; set -u
+  [ "$(node_major)" -ge "$NODE_MAJOR" ] || { say "FAILED: nvm installed Node $NODE_MAJOR, but node is $(node --version)" >&2; exit 1; }
+  # nvm changes only this process: the agent's shell gets the image's fixed PATH, not a profile that sources nvm.sh.
+  # Linked into /usr/local/bin, which is before the image's Node on that PATH, Node 24 reaches the agent's session.
+  NODE_BIN=$(dirname "$(command -v node)")
+  step "linked Node $NODE_MAJOR into $LINK_DIR" $SUDO ln -sf "$NODE_BIN/node" "$NODE_BIN/npm" "$NODE_BIN/npx" "$LINK_DIR/"
 fi
 
 # The repository's dependencies, again only when package-lock.json changed since the last install.

@@ -34,7 +34,7 @@ function environment(t: TestContext) {
   for (const dir of [repo, bin, home, nvm]) mkdirSync(dir, { recursive: true });
   cpSync(join(REPOSITORY, SCRIPT), join(repo, SCRIPT), { recursive: true });
   writeFileSync(join(repo, 'package-lock.json'), '{"lockfileVersion": 3}\n');
-  for (const tool of ['bash', 'cat', 'chmod', 'cut', 'dirname', 'env', 'head', 'id', 'mkdir', 'mktemp', 'rm', 'sed', 'sha256sum', 'touch'])
+  for (const tool of ['bash', 'cat', 'chmod', 'cut', 'dirname', 'env', 'head', 'id', 'ln', 'mkdir', 'mktemp', 'rm', 'sed', 'sha256sum', 'touch'])
     symlinkSync(which(tool), join(bin, tool));
   // node: the real one, unless FAKE_NODE says which major version it is.
   writeFileSync(join(bin, 'node'), `#!/bin/sh
@@ -49,14 +49,24 @@ for p in "$@"; do [ "$p" = jq ] && printf '#!/bin/sh\\necho jq-1.8.1\\n' > "${bi
   stub(bin, 'gh', 'echo "gh version 2.104.0"');
   stub(bin, 'npm', '[ "$1" = ci ] && { [ -z "$FAIL_NPM" ] || { echo "npm error: $FAIL_NPM" >&2; exit 1; }; mkdir -p node_modules; }; exit 0');
   stub(bin, 'npx', 'for a in "$@"; do [ "$a" = --version ] && echo "Version ${2#playwright@}"; done; exit 0');
-  writeFileSync(join(nvm, 'nvm.sh'), 'nvm() { echo "nvm $*" >> "$CALLS"; }\n');
+  // nvm's Node 24, which `nvm use` puts first on the script's own PATH, as the real one does.
+  const node24 = join(nvm, 'versions/node/v24.0.0/bin'), links = join(root, 'usr-local-bin');
+  for (const dir of [node24, links]) mkdirSync(dir, { recursive: true });
+  writeFileSync(join(node24, 'node'), `#!/bin/sh
+if [ "$1" = -p ] && [ "$2" = 'process.versions.node.split(".")[0]' ]; then echo 24; exit; fi
+if [ "$1" = --version ]; then echo v24.0.0; exit; fi
+exec "${process.execPath}" "$@"\n`);
+  chmodSync(join(node24, 'node'), 0o755);
+  for (const tool of ['npm', 'npx']) symlinkSync(join(bin, tool), join(node24, tool));
+  writeFileSync(join(nvm, 'nvm.sh'), `nvm() { echo "nvm $*" >> "$CALLS"; [ "$1" = use ] && PATH="${node24}:$PATH"; return 0; }\n`);
   const calls = join(root, 'calls');
   const run = (env: Record<string, string> = {}) => {
     writeFileSync(calls, '');
-    const r = spawnSync(join(repo, SCRIPT), { cwd: home, encoding: 'utf8', env: { PATH: bin, HOME: home, CALLS: calls, NVM_DIR: nvm, ...env } });
+    const r = spawnSync(join(repo, SCRIPT), { cwd: home, encoding: 'utf8',
+      env: { PATH: bin, HOME: home, CALLS: calls, NVM_DIR: nvm, STARTUP_LINK_DIR: links, ...env } });
     return { status: r.status, out: r.stdout, err: r.stderr, calls: readFileSync(calls, 'utf8').trim().split('\n').filter(Boolean) };
   };
-  return { repo, run };
+  return { repo, bin, links, run };
 }
 
 test('a fresh environment gets jq, node_modules, Chromium and its system libraries, then a healthcheck', (t) => {
@@ -125,12 +135,17 @@ test('a repository that depends on Playwright gets the Chromium of its own versi
   assert.match(r.out, /^startup: ok: Version 1\.70\.0$/m);
 });
 
-test('a Node older than 24 gets Node 24 from nvm', (t) => {
-  const { run } = environment(t);
+test('a Node older than 24 gets Node 24 from nvm, in the agent\'s next shell too', (t) => {
+  const { bin, links, run } = environment(t);
   const r = run({ FAKE_NODE: '20' });
   assert.equal(r.status, 0, r.err);
   assert.deepEqual(r.calls.filter((c) => c.startsWith('nvm ')), ['nvm install 24', 'nvm alias default 24', 'nvm use --silent default']);
   assert.match(r.out, /^startup: installed Node 24$/m);
+  assert.match(r.out, /^startup: ok: v24\.0\.0$/m);
+  // A new shell has no nvm: it gets the image's PATH, where /usr/local/bin comes before the old Node.
+  for (const tool of ['node', 'npm', 'npx']) assert.ok(existsSync(join(links, tool)), `${tool} is linked`);
+  const next = spawnSync('node', ['--version'], { encoding: 'utf8', env: { PATH: `${links}:${bin}`, FAKE_NODE: '20' } });
+  assert.equal(next.stdout, 'v24.0.0\n');
 });
 
 test('a Node older than 24 with no nvm fails loudly', (t) => {
@@ -173,4 +188,13 @@ test('a skill installs jq and Chromium only where the script did not run, and AG
   const agents = readFileSync(join(REPOSITORY, 'AGENTS.md'), 'utf8');
   assert.match(agents, /\[\.air\/cloud\/startup\.sh\]\(\.air\/cloud\/startup\.sh\)/);
   for (const what of ['`jq`', '`gh`', 'Node >= 24', '`node_modules`', 'Chromium']) assert.ok(agents.includes(what), `AGENTS.md names ${what}`);
+});
+
+test('a sandbox of a skill, with a new HOME, keeps the browsers\' folder, so it finds the script\'s Chromium', () => {
+  const sandboxes = readdirSync(join(REPOSITORY, '.agents/skills')).flatMap((name) =>
+    readFileSync(join(REPOSITORY, '.agents/skills', name, 'SKILL.md'), 'utf8').split('\n')
+      .filter((l) => /env -i .*HOME="\$\(mktemp -d\)"/.test(l)).map((line) => ({ name, line })));
+  assert.ok(sandboxes.length >= 3, 'code-review, address-review and merge-when-reviewed run a pull request in a sandbox');
+  for (const { name, line } of sandboxes)
+    assert.ok(line.includes('PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" HOME="$(mktemp -d)"'), `${name}: ${line}`);
 });

@@ -85,9 +85,10 @@ For each finding, reproduce what it claims, as it says to:
 Stay in the pull request's scope. A real problem outside it: file an issue ([Filing an issue](#filing-an-issue)) and name it, `#<m>`, in the answer.
 
 ## 2. Verify
-Run the pull request's code without a write token in its environment; `gh` keeps its token for posting:
+Run the pull request's code without a write token in its environment; `gh` keeps its token for posting, and Playwright
+its browsers' folder, so the Chromium of `.air/cloud/startup.sh` is found under the new `HOME`:
 ```sh
-env -i PATH="$PATH" HOME="$(mktemp -d)" sh -c 'npm ci && npm run typecheck && npm test && ./skill-atlas scan ./fixture'
+env -i PATH="$PATH" PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" HOME="$(mktemp -d)" sh -c 'npm ci && npm run typecheck && npm test && ./skill-atlas scan ./fixture'
 ```
 CI runs `npm run e2e` with its own token. A skill copy in `.agents/skills` and `.claude/skills` stays byte-identical.
 
