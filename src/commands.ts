@@ -85,12 +85,13 @@ async function printOrganization(organization: Organization, context: Context) {
 
 /**
  * The rate limit with when it resets, in the terminal's time zone, `HH:MM`; both rounded up to the
- * minute, so trying at the time shown works. No reset time: the core's message.
+ * minute, so trying at the time shown works; a reset already past, the next minute, never a time
+ * behind the clock. No reset time: the core's message.
  */
 function rateLimitText({ resetsAt, token, message }: RateLimited, now = Date.now()): string {
   if (!resetsAt) return message;
   const minute = 60_000;
-  const at = new Date(Math.ceil(resetsAt.getTime() / minute) * minute);
+  const at = new Date(Math.max(Math.ceil(resetsAt.getTime() / minute), Math.floor(now / minute) + 1) * minute);
   const minutes = Math.max(1, Math.ceil((resetsAt.getTime() - now) / minute));
   const time = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
   const resets = `it resets at ${time} (in ${count(minutes, 'minute', 'minutes')})`;

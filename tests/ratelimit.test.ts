@@ -118,10 +118,47 @@ test('rounded up to the minute, at least 1: a reset at hh:mm:20, or one already 
     errorText({ error: 'unused', rateLimit: { resetsAt: new Date(reset * 1000).toISOString(), token } }, now, { locale: 'en-GB', timeZone: 'UTC' });
   assert.equal(page(Date.UTC(2026, 10, 26, 14, 11, 30)), 'GitHub rate limit reached; it resets at 14:32 (in 20 minutes)');
   assert.equal(page(Date.UTC(2026, 10, 26, 14, 31, 30)), 'GitHub rate limit reached; it resets at 14:32 (in 1 minute)');
-  // The CLI rounds the same way: a reset already past is "in 1 minute", not "in 0 minutes".
-  const past = Math.floor(Date.now() / 1000) - 10;
-  const scanned = await atlas('github.com/JetBrains/example', recording({ [REPOSITORY]: primary(past) }));
-  assert.equal(scanned.stderr, `GitHub rate limit reached; it resets at ${hhmm(past * 1000)} (in 1 minute)`);
+  // The CLI rounds the same way.
+  const scanned = await atlas('github.com/JetBrains/example', recording({ [REPOSITORY]: primary(reset) }));
+  assert.match(scanned.stderr, /^GitHub rate limit reached; it resets at \d\d:\d\d \(in \d+ minutes?\)$/);
+});
+
+test('a reset already past (a clock ahead of GitHub\'s): the next minute, in 1 minute, never a time behind the clock', async () => {
+  // Seen at 14:24:10, 3 hours after GitHub's reset time, and 10 seconds after it.
+  const now = Date.UTC(2026, 10, 26, 14, 24, 10);
+  for (const resetsAt of [new Date(now - 3 * 60 * MINUTE), new Date(now - 10_000)]) {
+    const page = errorText({ error: 'unused', rateLimit: { resetsAt: resetsAt.toISOString(), token: true } }, now, { locale: 'en-GB', timeZone: 'UTC' });
+    assert.equal(page, 'GitHub rate limit reached; it resets at 14:25 (in 1 minute)');
+  }
+  // The CLI, on the clock: GitHub's reset 3 hours ago, or seconds ago.
+  for (const past of [Math.floor(Date.now() / 1000) - 3 * 60 * 60, Math.floor(Date.now() / 1000) - 10]) {
+    const before = Date.now();
+    const scanned = await atlas('github.com/JetBrains/example', recording({ [REPOSITORY]: primary(past) }));
+    assert.equal(scanned.code, 1);
+    const time = /^GitHub rate limit reached; it resets at (\d\d:\d\d) \(in 1 minute\)$/.exec(scanned.stderr)?.[1];
+    assert.ok(time, scanned.stderr);
+    const next = (ms: number) => new Date((Math.floor(ms / MINUTE) + 1) * MINUTE).toISOString().slice(11, 16);
+    assert.ok([next(before), next(Date.now())].includes(time), time);
+  }
+});
+
+test('a reset header out of a date\'s range: no reset time, none guessed; the web view answers 400', async (t) => {
+  const huge = '99999999999999';
+  const outOfRange: Recorded[] = [
+    primary(0, { 'x-ratelimit-reset': huge }),
+    { ...secondary(0), headers: { 'retry-after': huge } },
+  ];
+  for (const refused of outOfRange) {
+    const scanned = await atlas('github.com/JetBrains/example', recording({ [REPOSITORY]: refused }));
+    assert.deepEqual(scanned, { code: 1, stderr: 'GitHub rate limit reached; try again later' });
+    const anonymous = await atlas('github.com/JetBrains/example', recording({ [REPOSITORY]: refused }), false);
+    assert.deepEqual(anonymous, { code: 1, stderr: 'GitHub rate limit reached; set GITHUB_TOKEN' });
+    const answer = await (await serve(t, recording({ [REPOSITORY]: refused })))('github.com/JetBrains/example');
+    assert.deepEqual(answer, {
+      status: 400,
+      last: { error: 'GitHub rate limit reached; try again later', rateLimit: { resetsAt: null, token: true } },
+    });
+  }
 });
 
 test('the page: the reset time in the viewer\'s local time and format; without GITHUB_TOKEN, set it; none: the message', () => {

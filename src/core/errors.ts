@@ -25,9 +25,15 @@ export class RateLimited extends GitHubUnavailable {
  */
 export function resetTime(headers: Headers, now = Date.now()): Date | undefined {
   const retryAfter = headers.get('retry-after')?.trim();
-  if (retryAfter && /^\d+$/.test(retryAfter)) return new Date(now + Number(retryAfter) * 1000);
+  if (retryAfter && /^\d+$/.test(retryAfter)) return validDate(now + Number(retryAfter) * 1000);
   const reset = headers.get('x-ratelimit-reset')?.trim();
   const remaining = headers.get('x-ratelimit-remaining')?.trim();
-  if (reset && /^\d+$/.test(reset) && (remaining === undefined || remaining === '0')) return new Date(Number(reset) * 1000);
+  if (reset && /^\d+$/.test(reset) && (remaining === undefined || remaining === '0')) return validDate(Number(reset) * 1000);
   return undefined;
+}
+
+/** The time `ms` names, or none when it is out of a date's range: not a usable reset time. */
+function validDate(ms: number): Date | undefined {
+  const date = new Date(ms);
+  return Number.isNaN(date.getTime()) ? undefined : date;
 }
