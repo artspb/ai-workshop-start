@@ -7,7 +7,10 @@ export type Fetch = (url: string, init?: { headers?: Record<string, string> }) =
 
 export type GitHubOptions = {
   fetch: Fetch;
-  /** With a token, skills are found through code search; without it, through the tree. */
+  /**
+   * With a token, a default branch whose tree is too large for one answer is listed through code
+   * search; without one, only its skill roots are. Any tree in one answer is listed whole.
+   */
   token?: string;
 };
 
@@ -45,20 +48,25 @@ export async function openGitHub(input: string, options: GitHubOptions): Promise
   // whose tree is too large for one answer: the index sees only the default branch.
   const searchable = Boolean(options.token) && !name.ref;
   const [organization, repo] = id.split('/');
+  // The keys: a tree in one answer lists the same for every ref, with a token or without: one
+  // stored scan. A tree too large lists the roots, with a warning worded for a ref or for the
+  // default branch: stored apart. Code search is never stored: its index follows the default
+  // branch late, and may not have every skill of the commit yet. The names of the roots' keys
+  // are those an earlier version stored a scan of either kind under, so those are found again.
+  const key = (listing: string) => JSON.stringify(['github', id, sha, listing]);
+  const whole = key('whole tree');
+  const roots = searchable ? undefined : key(name.ref ? 'tree' : 'tree of the default branch');
   return {
     repository: { id, organization, name: repo, url: `https://github.com/${id}`, commit: sha },
     async list() {
       const tree = await github.json<Tree>(`${API}/repos/${id}/git/trees/${sha}?recursive=1`);
-      if (!tree.truncated) return { paths: files(tree), warnings: [] };
-      // The index follows the default branch late, and may not have every skill of the commit yet.
-      if (searchable) return { paths: await searchPaths(github, id), warnings: [], storable: false };
+      if (!tree.truncated) return { paths: files(tree), warnings: [], key: whole };
+      if (searchable) return { paths: await searchPaths(github, id), warnings: [] };
       const warnings: string[] = [];
-      return { paths: await rootPaths(github, id, sha, warnings, !name.ref), warnings };
+      return { paths: await rootPaths(github, id, sha, warnings, !name.ref), warnings, key: roots };
     },
     read: (path) => github.raw(`${RAW}/${id}/${sha}/${encodePath(path)}`),
-    // A tree is fixed by its commit: stored, by the commit and what a tree too large lists, the
-    // roots with a warning worded for the input, or code search, which is never stored.
-    key: JSON.stringify(['github', id, sha, name.ref ? 'tree' : searchable ? 'default branch, code search' : 'default branch']),
+    keys: roots ? [whole, roots] : [whole],
     ref: name.ref ?? `${info.default_branch} (default branch)`,
   };
 }

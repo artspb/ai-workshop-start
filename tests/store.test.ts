@@ -29,6 +29,21 @@ function github(head: string, { large = false } = {}): Recording {
       status: 200,
       body: large ? { truncated: true, tree: [] } : { truncated: false, tree: [{ path: SKILL, mode: '100644', type: 'blob', sha: '0' }] },
     },
+    // Too large: the skill roots, one level at a time, then each root's whole tree.
+    ...(large && {
+      [`https://api.github.com/repos/JetBrains/example/git/trees/${commit}`]: {
+        status: 200,
+        body: { truncated: false, tree: [{ path: '.claude', mode: '040000', type: 'tree', sha: `claude-${commit}` }] },
+      },
+      [`https://api.github.com/repos/JetBrains/example/git/trees/claude-${commit}`]: {
+        status: 200,
+        body: { truncated: false, tree: [{ path: 'skills', mode: '040000', type: 'tree', sha: `skills-${commit}` }] },
+      },
+      [`https://api.github.com/repos/JetBrains/example/git/trees/skills-${commit}?recursive=1`]: {
+        status: 200,
+        body: { truncated: false, tree: [{ path: 'commits/SKILL.md', mode: '100644', type: 'blob', sha: '0' }] },
+      },
+    }),
   });
   return {
     'https://api.github.com/repos/JetBrains/example': { status: 200, body: { full_name: 'JetBrains/example', default_branch: 'main' } },
@@ -108,9 +123,7 @@ test('with a token, a default branch that fits in one tree: listed through the t
   const again = await atlas(['scan', 'github.com/JetBrains/example'], { directory, token: 'test' });
   assert.deepEqual(again.requests, RESOLVE);
   assert.equal(again.stdout, first.stdout);
-  // Stored apart from a scan without a token: a tree too large lists differently with one.
-  assert.ok((await atlas(['scan', 'github.com/JetBrains/example'], { directory })).requests.length > RESOLVE.length);
-  assert.equal(readdirSync(directory).length, 2);
+  assert.equal(readdirSync(directory).length, 1);
 });
 
 test('with a token, a default branch too large for one tree: code search, never stored, scanned every time', async (t) => {
@@ -135,18 +148,70 @@ test('an index that caught up: the next code search finds the skill the last one
   assert.equal((await scan(await open(github(MAIN, { large: true })), store)).result.skills.length, 1);
 });
 
-test('the key is the commit and whether it was the default branch: the default branch and /tree/<ref> are stored apart', async (t) => {
+test('a tree in one answer: one stored scan for every ref, with a token or without', async (t) => {
   const directory = storeDirectory(t);
-  const branch = await atlas(['scan', 'github.com/JetBrains/example'], { directory });
-  assert.ok(branch.requests.some((url) => url.includes(`/trees/${MAIN}`)));
-  // The same commit through /tree/<ref>: its warning is worded for a ref; scanned once more.
-  const pinned = await atlas(['scan', `github.com/JetBrains/example/tree/${MAIN}`], { directory });
-  assert.ok(pinned.requests.some((url) => url.includes(`/trees/${MAIN}`)));
-  assert.equal(readdirSync(directory).length, 2);
-  for (const args of [['scan', 'github.com/JetBrains/example'], ['scan', `github.com/JetBrains/example/tree/${MAIN}`]]) {
-    assert.equal((await atlas(args, { directory })).requests.length, 2, args.join(' '));
+  const first = await atlas(['scan', 'github.com/JetBrains/example'], { directory });
+  assert.ok(first.requests.some((url) => url.includes(`/trees/${MAIN}`)));
+  for (const [args, token] of [
+    [['scan', 'github.com/JetBrains/example'], 'test'],
+    [['scan', `github.com/JetBrains/example/tree/${MAIN}`], undefined],
+    [['scan', 'github.com/JetBrains/example/tree/v1.0'], 'test'],
+  ] as const) {
+    const again = await atlas([...args], { directory, token });
+    assert.equal(again.requests.length, 2, `${args.join(' ')}: only resolved`);
+    assert.equal(again.stdout, first.stdout);
   }
-  assert.deepEqual((await openStore(directory).list()).map((stored) => stored.refs).sort(), [[MAIN], ['main (default branch)']]);
+  assert.deepEqual(
+    (await openStore(directory).list()).map((stored) => stored.refs),
+    [['main (default branch)', MAIN, 'v1.0']],
+  );
+});
+
+test('a tree too large: the roots, stored apart for the default branch and a ref; with a token, code search, never stored', async (t) => {
+  const directory = storeDirectory(t);
+  const large = true;
+  const hint = 'warning: the tree is too large to list at once; looked only in .agents/skills, .claude/skills, .github/skills, agent/skills';
+  // Without a token: the roots, and a warning that a token would search everywhere.
+  const roots = await atlas(['scan', 'github.com/JetBrains/example'], { directory, large });
+  assert.match(roots.stdout, /As of the first commit\./);
+  assert.equal(roots.stderr, `${hint} (GITHUB_TOKEN searches everywhere)`);
+  assert.equal(readdirSync(directory).length, 1);
+  // With a token: code search, not the stored roots, and not stored; every time.
+  for (let i = 0; i < 2; i++) {
+    const searched = await atlas(['scan', 'github.com/JetBrains/example'], { directory, large, token: 'test' });
+    assert.ok(searched.requests.some((url) => url.includes('/search/code')));
+    assert.equal(searched.stderr, '');
+    assert.equal(readdirSync(directory).length, 1);
+  }
+  // Without a token again: the stored roots.
+  const again = await atlas(['scan', 'github.com/JetBrains/example'], { directory, large });
+  assert.deepEqual(again.requests, RESOLVE);
+  assert.deepEqual([again.stdout, again.stderr], [roots.stdout, roots.stderr]);
+  // A ref at the same commit: the roots, with the warning worded for a ref; stored apart, with a token too.
+  const pinned = await atlas(['scan', `github.com/JetBrains/example/tree/${MAIN}`], { directory, large, token: 'test' });
+  assert.ok(!pinned.requests.some((url) => url.includes('/search/code')));
+  assert.equal(pinned.stderr, hint);
+  assert.equal(readdirSync(directory).length, 2);
+  assert.equal((await atlas(['scan', `github.com/JetBrains/example/tree/${MAIN}`], { directory, large })).requests.length, 2);
+});
+
+test('scans an earlier version stored, by ref and by default branch without a token, are found again', async (t) => {
+  const directory = storeDirectory(t);
+  const store = openStore(directory);
+  // What the earlier version stored them under: the commit and how its tree was listed.
+  const earlier = (listing: string, description: string) => {
+    const repository = { id: 'JetBrains/example', organization: 'JetBrains', name: 'example', url: 'https://github.com/JetBrains/example', commit: MAIN };
+    const skill = { id: `JetBrains/example:${SKILL}`, repository: repository.id, path: SKILL, name: 'commits', description, commit: MAIN, copies: [] };
+    return store.set(JSON.stringify(['github', 'JetBrains/example', MAIN, listing]), { ref: '', result: { repository, skills: [skill], warnings: [] } });
+  };
+  await earlier('tree of the default branch', 'Stored for the default branch.');
+  await earlier('tree', 'Stored for a ref.');
+  const branch = await atlas(['scan', 'github.com/JetBrains/example'], { directory });
+  assert.deepEqual(branch.requests, RESOLVE);
+  assert.match(branch.stdout, /Stored for the default branch\./);
+  const pinned = await atlas(['scan', `github.com/JetBrains/example/tree/${MAIN}`], { directory });
+  assert.equal(pinned.requests.length, 2);
+  assert.match(pinned.stdout, /Stored for a ref\./);
 });
 
 test('two refs at one commit: one stored scan, scanned once, and both refs recorded, in order', async (t) => {
@@ -193,8 +258,10 @@ test('warnings are stored with the result', async (t) => {
   const open = () => openGitHub('github.com/JetBrains/example', { fetch: replay(recording) });
   const { result: first } = await scan(await open(), store);
   assert.deepEqual(first.warnings, [`${missing}: listed, but not found at the scanned commit; skipped`]);
-  const again = await openStore(directory).get((await open()).key!);
+  // Found again, with its warning, without listing.
+  const { result: again, stored } = await scan(await open(), openStore(directory));
   assert.deepEqual(again, first);
+  assert.ok(stored);
 });
 
 test('a failed scan is not stored', async (t) => {
@@ -293,9 +360,8 @@ test('every stored scan, the latest first: repository, commit, what was asked fo
   let clock = Date.parse('2026-11-26T10:00:00Z');
   const store = openStore(directory, () => new Date(clock));
   assert.deepEqual(await store.list(), []);
-  const open = (input: string, head: string, token?: string) => openGitHub(input, { fetch: replay(github(head, { large: Boolean(token) })), token });
+  const open = (input: string, head: string) => openGitHub(input, { fetch: replay(github(head)) });
   await scan(await open(`github.com/JetBrains/example/tree/${MAIN}`, MAIN), store);
-  await scan(await open('github.com/JetBrains/example', MAIN, 'test'), store); // a tree too large: code search, not stored
   clock += 60_000;
   await scan(await open('github.com/JetBrains/example', NEXT), store);
   clock += 60_000;
@@ -326,8 +392,8 @@ test('every stored scan, the latest first: repository, commit, what was asked fo
   assert.equal((await store.open(scans[1].id))?.skills[0].description, 'As of the first commit.');
   for (const id of ['0'.repeat(64), '../package', scans[0].id.toUpperCase()]) assert.equal(await store.open(id), undefined, id);
   // The id of a key, as the list has it.
-  const key = (await open('github.com/JetBrains/example', NEXT)).key!;
-  assert.equal(store.id(key), scans[0].id);
+  const { stored } = await scan(await open('github.com/JetBrains/example', NEXT), store);
+  assert.equal(stored, scans[0].id);
 });
 
 test('the list skips what is not a stored scan: a corrupt file, another file', async (t) => {
