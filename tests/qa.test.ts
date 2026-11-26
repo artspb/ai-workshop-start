@@ -34,11 +34,21 @@ for (const script of scripts) {
   });
 }
 
-// A quota's limit is the token's, kept by GitHub (5,000 for a person's token, more for others):
+// A quota's limit is the token's, kept by GitHub (5,000 for a person's token, more or fewer for others:
+// GitHub Actions' own gets 1,000):
 // said in words, never quoted as text the page must show (qa/README.md#writing-a-new-script).
 for (const script of scripts) {
   test(`qa/${script}: quotes no quota's limit, says it in words`, () => {
     const quoted = [...read(script).matchAll(/"([^"\n]*)"/g)].map(([, text]) => text);
     for (const text of quoted) assert.doesNotMatch(text, /\bof [\d,]+ (points )?left\b/, `"${text}" quotes a limit GitHub keeps`);
+  });
+}
+
+// An example limit is never a floor: a token can get fewer than 5,000 (GitHub Actions' own gets 1,000 an hour).
+for (const file of [...scripts.map((script) => `qa/${script}`), 'spec/web.md']) {
+  test(`${file}: a limit of 5,000 is an example, the limit can be more or fewer`, () => {
+    const text = readFileSync(fileURLToPath(new URL(`../${file}`, import.meta.url)), 'utf8');
+    for (const [said] of text.matchAll(/\([^()\n]*5,000 for [^()\n]*\)/g))
+      assert.match(said, /\bfewer\b/, `${said} reads as a floor of 5,000`);
   });
 }

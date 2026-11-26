@@ -57,7 +57,7 @@ The core runs in the server; the page is a *thin client*: HTML, CSS and plain Ja
 ## Requests and quota
 A scan can spend thousands of GitHub requests; the page says what each one cost, and what is left, before the limit stops it.
 - **Counted by kind**, each request GitHub answers (one that gets no answer is not): `rest`, the REST API's, on the hour's
-  limit GitHub gives `GITHUB_TOKEN` (5,000 for a person's, more for some), 60 without, as GitHub reports it;
+  limit GitHub gives `GITHUB_TOKEN` (5,000 for a person's, more or fewer for others), 60 without, as GitHub reports it;
   `graphql`, the GraphQL queries, on a quota of their own, in points;
   `files`, the file reads from `raw.githubusercontent.com`, on neither
 - **The quota** from GitHub's answers, never an extra request: `x-ratelimit-remaining`, `x-ratelimit-limit`,
