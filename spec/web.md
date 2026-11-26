@@ -46,6 +46,9 @@ The core runs in the server; the page is a *thin client*: HTML, CSS and plain Ja
     its repository, the commit and every ref asked for, and its pinned **link**; sorted by name, then repository, then path
   - A result's repository opens its scan *as stored*, as a row of **Scanned before** does: `/?scan=<id>`
   - None: `No skill in a stored scan matches.`; searched again after each scan, as the list is updated
+  - Searched once the typing pauses, **250 ms** after the last change: one request, not one a keystroke;
+    an answer to an older word is not shown. The box emptied: the list, at once
+  - The first **50** results, then `and <M> more`: one letter matches about the whole store
   - From the store only, without GitHub: offline too, no rate limit spent
 ## API
 `GET /api/scan?repo=<URL | directory>` → `200` with JSON:
@@ -73,7 +76,9 @@ An organization, `?repo=github.com/<owner>` → `200` with JSON:
 
 `GET /api/scans/<id>` → `200`, the stored result, as `/api/scan` answers it, `stored` being `<id>`; no such scan: `404`, `{ error }`
 
-`GET /api/search?q=<words>` → `200`, `{ results: [{ id, name, sentence, link, repository, refs, scan }] }`, from the store only:
+`GET /api/search?q=<words>` → `200`, `{ results: [{ id, name, sentence, link, repository, refs, scan }], more }`, from the store only:
 the skills of each repository's latest stored scan that match, by name, description or repository, sorted as the page shows them
+- `results`: the first 50; `more`: how many more match, `0` when none
 - `sentence`: the description's first sentence, `''` without one; `refs`: the stored scan's; `scan`: its id, for `/api/scans/<id>`
-- No word in `q`, or no store: `{ results: [] }`
+- No word in `q`, or no store: `{ results: [], more: 0 }`
+- Each stored file is read once a search

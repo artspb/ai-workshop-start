@@ -75,6 +75,24 @@ export function openStore(directory: string, now: () => Date = () => new Date())
     return entry?.key === key ? entry : undefined;
   }
 
+  /** Every stored scan with its result, the latest first; each file read once. */
+  async function listResults(): Promise<(StoredScan & { result: ScanResult })[]> {
+    const names = await readdir(directory).catch(() => [] as string[]);
+    const ids = names.map((name) => name.replace(/\.json$/, '')).filter((name) => ID.test(name));
+    const scans: (StoredScan & { result: ScanResult })[] = [];
+    for (const scanId of ids) {
+      const entry = await read(scanId);
+      if (!entry) continue;
+      const { repository, skills, warnings } = entry.result;
+      scans.push({ id: scanId, repository, refs: entry.refs, skills: skills.length, warnings: warnings.length, scannedAt: entry.scannedAt, result: entry.result });
+    }
+    // The latest first; the same time, by repository then commit.
+    const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+    return scans.sort(
+      (a, b) => compare(b.scannedAt, a.scannedAt) || compare(a.repository.id, b.repository.id) || compare(a.repository.commit, b.repository.commit),
+    );
+  }
+
   return {
     id,
     async get(key) {
@@ -95,21 +113,9 @@ export function openStore(directory: string, now: () => Date = () => new Date())
       });
     },
     async list() {
-      const names = await readdir(directory).catch(() => [] as string[]);
-      const ids = names.map((name) => name.replace(/\.json$/, '')).filter((name) => ID.test(name));
-      const scans: StoredScan[] = [];
-      for (const scanId of ids) {
-        const entry = await read(scanId);
-        if (!entry) continue;
-        const { repository, skills, warnings } = entry.result;
-        scans.push({ id: scanId, repository, refs: entry.refs, skills: skills.length, warnings: warnings.length, scannedAt: entry.scannedAt });
-      }
-      // The latest first; the same time, by repository then commit.
-      const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
-      return scans.sort(
-        (a, b) => compare(b.scannedAt, a.scannedAt) || compare(a.repository.id, b.repository.id) || compare(a.repository.commit, b.repository.commit),
-      );
+      return (await listResults()).map(({ result, ...scan }) => scan);
     },
+    listResults,
     async open(scanId) {
       return ID.test(scanId) ? (await read(scanId))?.result : undefined;
     },

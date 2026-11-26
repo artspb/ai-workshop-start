@@ -80,7 +80,7 @@ async function handle(request: IncomingMessage, response: ServerResponse, option
     }
     return;
   }
-  if (url.pathname === '/api/search') return json(response, 200, { results: await search(url.searchParams.get('q') ?? '', options.store) });
+  if (url.pathname === '/api/search') return json(response, 200, await search(url.searchParams.get('q') ?? '', options.store));
   if (url.pathname === '/api/scans') return json(response, 200, { scans: (await options.store?.list()) ?? [] });
   const stored = /^\/api\/scans\/([^/]+)$/.exec(url.pathname);
   if (stored) {
@@ -155,26 +155,28 @@ function answer({ repository, skills, warnings }: ScanResult, stored: string | n
   };
 }
 
+/** How many results a search answers: one letter matches about the whole store. */
+const SEARCH_RESULTS = 50;
+
 /**
  * The skills of every stored scan that match the words, in the name, description or repository: each
- * repository once, from its latest stored scan. From the store only: GitHub is not asked.
+ * repository once, from its latest stored scan; the first SEARCH_RESULTS, and how many more match.
+ * From the store only, each file read once: GitHub is not asked.
  */
 async function search(query: string, store: Store | undefined) {
-  if (!store || !query.trim()) return [];
-  const latest = new Map<string, StoredScan>();
+  if (!store || !query.trim()) return { results: [], more: 0 };
+  const latest = new Map<string, StoredScan & { result: ScanResult }>();
   // The list is the latest first: a repository's first stored scan is its latest.
-  for (const stored of await store.list()) if (!latest.has(stored.repository.id)) latest.set(stored.repository.id, stored);
+  for (const stored of await store.listResults()) if (!latest.has(stored.repository.id)) latest.set(stored.repository.id, stored);
   const results = [];
-  for (const { id, refs } of latest.values()) {
-    const result = await store.open(id);
-    if (!result) continue;
+  for (const { id, refs, result } of latest.values()) {
     const { repository } = result;
     for (const skill of filterSkills(result.skills, query, repository.id))
       results.push({ id: skill.id, name: skill.name, sentence: firstSentence(skill.description), link: skillLink(repository, skill), repository, refs, scan: id, path: skill.path });
   }
   const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
   results.sort((a, b) => compare(a.name, b.name) || compare(a.repository.id, b.repository.id) || compare(a.path, b.path));
-  return results.map(({ path, ...result }) => result);
+  return { results: results.slice(0, SEARCH_RESULTS).map(({ path, ...result }) => result), more: Math.max(results.length - SEARCH_RESULTS, 0) };
 }
 
 /** How many repositories of an organization are scanned, of how many. */
