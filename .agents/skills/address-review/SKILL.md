@@ -26,13 +26,15 @@ author or its last line. A comment typed in the web form may end its lines with 
 MARK='(?m)^<!-- address-review( answers:[0-9,]+)? -->\s*$'
 # jq: def mine: gsub("(?m)^ {0,3}(`{3,}|~{3,})[^\\n]*\\n[\\s\\S]*?(^ {0,3}\\1[`~]*[ \\t]*\\r?$|\\z)"; "") | test($m);
 ```
+Code Review has a marker of its own, read the same way: its reply that leaves a thread open (code-review, section 4)
+ends with `<!-- code-review: stays open -->`, `OPEN='(?m)^<!-- code-review: stays open -->\s*$'`.
 
 ## 0. Is there anything to do?
 This skill runs on every submitted review, and your own round is a review too. Stop, posting nothing, when:
 - the pull request is closed, merged, a draft, or from a fork (`isCrossRepository`);
-- nothing is **unanswered** (below) and no review of yours is `PENDING`: a stranded one, whose replies already read as
+- nothing is **unanswered** (below) and you have no pending round (`R`, section 3): a stranded one, whose replies already read as
   answers, is still submitted (section 3), even with nothing else to answer;
-- the pull request already has **3 or more** commits starting with `Address review` and no review of yours is `PENDING`
+- the pull request already has **3 or more** commits starting with `Address review` and you have no pending round
   (a stranded round 3 is still submitted, section 3, without a new commit): then, once, post
   `Stopped after 3 rounds of review fixes; the open threads are for a person.` as a pull request comment
   (`gh pr comment <n>`, with the marker), unless one of the pull request's `comments` has it already.
@@ -49,13 +51,17 @@ gh pr view <n> --json commits --jq '[.commits[].messageHeadline | select(startsw
 The count reads the pull request, not the checkout: an Air checkout is shallow, without `origin/main`.
 
 **Unanswered** is:
-- a **thread** that is not resolved and whose last comment has no marker line;
+- a **thread** that is not resolved and whose last comment has no marker line, neither yours nor Code Review's
+  "stays open": that one waits for a person, and answering it again would start another re-review, without end.
+  A comment after it, by a person, makes the thread unanswered again;
 - a **review body** with findings, a `path:line` outside the diff or a request, that has no marker line and
   whose `databaseId` no `answers:` marker names. A body with no finding ("nothing blocks") needs no answer.
 
 ```sh
-jq --arg m "$MARK" 'def mine: gsub("(?m)^ {0,3}(`{3,}|~{3,})[^\\n]*\\n[\\s\\S]*?(^ {0,3}\\1[`~]*[ \\t]*\\r?$|\\z)"; "") | test($m);
-  .data.repository.pullRequest.reviewThreads.nodes[] | select((.isResolved | not) and (.comments.nodes[-1].body | mine | not))' pr.json
+OPEN='(?m)^<!-- code-review: stays open -->\s*$'
+jq --arg m "$MARK" --arg o "$OPEN" 'def code: gsub("(?m)^ {0,3}(`{3,}|~{3,})[^\\n]*\\n[\\s\\S]*?(^ {0,3}\\1[`~]*[ \\t]*\\r?$|\\z)"; "");
+  .data.repository.pullRequest.reviewThreads.nodes[]
+  | select((.isResolved | not) and (.comments.nodes[-1].body | code | test($m) or test($o) | not))' pr.json
 ```
 Use `jq` itself, installed if missing (`sudo apt-get update && sudo apt-get install -y jq`): `gh --jq` has no backreferences and rejects the pattern.
 
@@ -88,10 +94,14 @@ git push origin HEAD:<headRefName>       # never force-push
 Then answer everything in **one** review: every reply of a separate API call is a review of its own and starts
 another run of this skill, and of code-review, while you are still replying. One pending review, a reply per thread, one submit.
 GitHub allows one pending review per user and pull request, and every automation is the same user: a run that stopped
-before its submit leaves one. **A review of yours in state `PENDING` (`viewerDidAuthor`) is `R`**; add one only without it.
+before its submit leaves one. **A review of yours in state `PENDING` (`viewerDidAuthor`) whose body is empty or has
+your marker line is `R`**; add one only without it. One whose body is text without your marker is Code Review's,
+in flight (it is created with its summary as the body, code-review section 6): never reply in it nor submit it, or its
+findings would read as your round. Wait a minute and read again, up to three times; still there, post nothing and stop
+(a pending review blocks yours, and Code Review's run deletes it when it fails).
 Every free-text value goes with `-f`: `-F` reads a value starting with `@` as a file and `123` as a number.
 ```sh
-R=<the id of your PENDING review>      # or, without one:
+R=<the id of your pending round>      # or, without one:
 R=$(gh api graphql -f pr=<pullRequest id> -f query='mutation($pr: ID!) {
   addPullRequestReview(input: {pullRequestId: $pr}) { pullRequestReview { id } } }' --jq '.data.addPullRequestReview.pullRequestReview.id')
 # for each unanswered thread
@@ -108,7 +118,7 @@ gh api graphql -f r="$R" -f b=$'<the round in a line; answers to review bodies>\
 - **Not changed**: why, with the evidence.
 - Never resolve a thread: every automation posts as the same bot, so only the reviewer's resolve (Code Review's,
   once it is satisfied with the answer) or a person's means "settled". A person resolving a thread counts the same,
-  as an explicit "fine as is".
+  as an explicit "fine as is"; a resolve is not a review, so it starts nothing.
 
 ## 4. Green
 `gh pr checks <n> --watch`. Red: fix it in another `Address review` commit, if rounds are left; never skip or weaken a test.
