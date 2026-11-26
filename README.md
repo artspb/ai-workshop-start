@@ -20,3 +20,4 @@ http://localhost:4173 ([web view](spec/web.md)); `--port` picks another port. Se
 
 - [spec/](spec/): what it does. [AGENTS.md](AGENTS.md): the definition of done.
 - [fixture/](fixture/README.md): a small repository for the tests.
+- [qa/](qa/README.md): the web view's test scripts, for a person or the `manual-qa` skill, in a browser.
