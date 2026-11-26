@@ -26,10 +26,12 @@ gh api repos/{owner}/{repo}/pulls/<n>/reviews     # earlier reviews
 gh api repos/{owner}/{repo}/pulls/<n>/comments    # earlier inline comments
 ```
 - **Nothing new, nothing posted**: this skill also runs on every submitted review, replies included.
-  Your last review is the bot's latest review with a body and no line that is only address-review's marker
-  (`(?m)^<!-- address-review( answers:[0-9,]+)? -->\s*$`): a thread reply is a review with an empty body, and
-  a summary that merely mentions the marker is still yours.
+  Your last review is the bot's latest review with a body and, outside its code blocks, no line that is only
+  address-review's marker (`(?m)^<!-- address-review( answers:[0-9,]+)? -->\s*$`): a thread reply is a review with
+  an empty body, and a summary that merely mentions the marker is still yours.
   Its commit is the pull request's head, and no new comment asks you something: post nothing.
+  A push and a submitted review both start this skill, so read the reviews **again right before you post**:
+  a review of yours at the head has appeared meanwhile → post nothing.
 - **CI is a fact, not a finding to repeat**: if a check fails, link the failing job in the summary; don't rerun what CI runs.
 - **A re-review**, after a new push: review what changed since your last review
   (`git fetch --depth 1 origin <last reviewed commit>`, then `git diff <last reviewed commit>..<head>`:
@@ -81,6 +83,8 @@ gh api repos/{owner}/{repo}/pulls/<n>/reviews --method POST --input review.json
     Don't look the author up first: `gh api user` gives no answer for a GitHub App token (403).
   - `Line could not be resolved`: a comment is on a line outside the diff, and the error does not say which.
     Check each comment's line against `gh pr diff <n>` and move those outside it into the summary, as `path:line`.
+  - `User can only have one pending review per pull request`: an address-review round of the same bot is in flight.
+    Wait a minute and post again, up to three times; then leave it: its next run submits the stranded review.
 - `line` is the line in the new file; a range adds `start_line`.
 
 ## Example
